@@ -55,7 +55,7 @@ def render_normal_and_depth_buffers(mesh, camera, camera_transform, resolution, 
     scene.add(pyrender.Mesh.from_trimesh(mesh, smooth = False))
     scene.add(camera, pose=camera_transform)
     
-    if len(resolution)==2:
+    if not isinstance(resolution, int):
         res_x, res_y= resolution
     else:
         res_x=res_y=resolution

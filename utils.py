@@ -53,7 +53,7 @@ def save_latest(folder, decoder, optimizer, latents=None, epoch=0):
         save_latents(folder, "latest_latents.npy", latents)
 
 
-def save_checkpoints(folder, decoder, optimizer, latents=None, epoch=0):
+def save_ckpts(folder, decoder, optimizer, latents=None, epoch=0):
     print("Check point file is saved to {}".format(folder))
     base_name = "ckpt_epoch_" + str(epoch) + "_"
     save_model(folder, base_name + "model.pth", decoder, epoch)
@@ -62,7 +62,7 @@ def save_checkpoints(folder, decoder, optimizer, latents=None, epoch=0):
         save_latents(folder, base_name + "latents.npy", latents)
 
 
-def load_model_parameters(file_name, decoder, device=torch.device('cpu')):
+def load_model(file_name, decoder, device=torch.device('cpu')):
     if not os.path.isfile(file_name):
         raise Exception(
             'model state dict "{}" does not exist'.format(file_name))

@@ -6,12 +6,11 @@ import numpy as np
 import torch
 import trimesh as m
 from skimage.measure import marching_cubes
-from torch.utils.data.dataloader import DataLoader
 
 from data import SampleDataset
-from mesh_to_sdf.mesh_to_sdf import scan, pyrender_wrapper
+from mesh_to_sdf.mesh_to_sdf import pyrender_wrapper, scan
 from network import ImplicitNet
-from utils import load_latents, load_model_parameters
+from utils import load_latents, load_model
 import pyrender  # noqa
 
 
@@ -189,7 +188,7 @@ if __name__ == '__main__':
         (not args.cpu) and torch.cuda.is_available()) else 'cpu')
     net_params = {'d_in': args.latent_size + 3, 'dims': [128, 128, 128]}
     network = ImplicitNet(**net_params).to(device)
-    load_model_parameters(args.network, network, device)
+    load_model(args.network, network, device)
     latent_vecs = load_latents(args.latents, device)
 
     dataset = SampleDataset(args.data,  False)

@@ -20,14 +20,14 @@ class MeshSampler():
         color[sdf < 0, 2] = 1
         trimesh.PointCloud(pts, color).show()
 
-    def _sample_sdf(self):
-
+    def sample_sdf(self):
         mesh_centre = np.mean(self.mesh.vertices, axis=0)
         bounding_radius = np.max(np.linalg.norm(
             self.mesh.vertices-mesh_centre, axis=1)) * 1.2
         surface_point_cloud = mesh_to_sdf.get_surface_point_cloud(self.mesh)
         points, sdf = surface_point_cloud.sample_sdf_near_surface(
-            sign_method='normal', radius=bounding_radius, centre=mesh_centre)
+            args.num_samples, sign_method='normal', 
+            radius=bounding_radius, centre=mesh_centre)
 
         self.display_sdf(points, sdf)
         surface_points = self.mesh.sample(2**16)
@@ -64,7 +64,8 @@ class DepthSampler():
             self.mesh.vertices-mesh_centre, axis=1)) * 1.2
         surface_point_cloud = mesh_to_sdf.get_surface_point_cloud(self.mesh)
         points, sdf = surface_point_cloud.sample_sdf_near_surface(
-            sign_method='normal', radius=bounding_radius, centre=mesh_centre)
+            args.num_samples, sign_method='normal', 
+            radius=bounding_radius, centre=mesh_centre)
 
         self.display_sdf(points, sdf)
         surface_points = self.mesh.sample(2**16)
@@ -95,6 +96,7 @@ if __name__ == '__main__':
     parser.add_argument('input', type=str)
     parser.add_argument('output', type=str)
     parser.add_argument('--voxel_size', type=float, default=0.1)
+    parser.add_argument('--num_samples', type=int, default=1000000)
     args = parser.parse_args()
 
     if os.path.isfile(args.input):
@@ -104,7 +106,7 @@ if __name__ == '__main__':
     else:
         sampler = DepthSampler(args.input, args.voxel_size)
 
-    samples, voxels = sampler._sample_sdf()
+    samples, voxels = sampler.sample_sdf()
     if not os.path.exists(args.output):
         os.makedirs(args.output, exist_ok=True)
 

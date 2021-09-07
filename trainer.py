@@ -1,16 +1,13 @@
 import argparse
 import os
 
-import numpy as np
 import torch
-import torch.nn.functional as F
 from torch.optim import Adam
-from torch.utils.data.dataloader import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from data import SampleDataset
 from network import ImplicitNet
-from utils import log_progress, save_checkpoints, save_latest
+from utils import log_progress, save_ckpts, save_latest
 
 
 class NetworkTrainer(object):
@@ -103,8 +100,8 @@ class NetworkTrainer(object):
                         self.optimizer, self.latent_vecs, n_iter)
 
             if self.ckpt_freq > 0 and n_iter % self.ckpt_freq == 0:
-                save_checkpoints(args.output, self.network,
-                                 self.optimizer, self.latent_vecs, n_iter)
+                save_ckpts(args.output, self.network,
+                           self.optimizer, self.latent_vecs, n_iter)
 
 
 if __name__ == '__main__':
