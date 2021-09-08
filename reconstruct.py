@@ -72,8 +72,8 @@ class ShapeReconstructor(object):
         self.resolution = resolution
 
     def interp_border(self, z_array, voxels):
-        min_voxel = np.amin(voxels, axis=0).astype(int)
-        max_voxel = np.amax(voxels, axis=0).astype(int)
+        min_voxel = np.round(np.amin(voxels, axis=0)).astype(int)
+        max_voxel = np.round(np.amax(voxels, axis=0)).astype(int)
         grid_size = max_voxel - min_voxel + 1
         grid_sdf = np.zeros(grid_size * (self.resolution-1) + 1)
         grid_count = np.zeros(grid_size * (self.resolution-1) + 1, dtype=int)

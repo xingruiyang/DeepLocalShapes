@@ -21,6 +21,7 @@ class NetworkTrainer(object):
                  output=None,
                  log_dir=None,
                  batch_size=1000,
+                 clamp_dist=0.1,
                  device=torch.device('cpu')):
         super(NetworkTrainer, self).__init__()
         self.network = network
@@ -32,8 +33,9 @@ class NetworkTrainer(object):
         self.latent_vecs = latent_vecs
         self.ckpt_freq = ckpt_freq
         self.batch_size = batch_size
+        self.clamp_dist = clamp_dist
         self.num_batch = (train_data.shape[0]-1)//batch_size+1
-        self.train_data = torch.from_numpy(train_data).to(device)
+        self.train_data = torch.from_numpy(train_data)
 
         if log_dir is not None:
             self.logger = SummaryWriter(log_dir)
@@ -58,21 +60,24 @@ class NetworkTrainer(object):
                 begin = batch_idx * self.batch_size
                 end = min(train_data.shape[0], (batch_idx+1)*self.batch_size)
 
-                latent_ind = train_data[begin:end, 0].int()
-                sdf_values = train_data[begin:end, 4] * input_scale
-                points = train_data[begin:end, 1:4] * input_scale
+                latent_ind = train_data[begin:end, 0].to(device).int()
+                sdf_values = train_data[begin:end, 4].to(device) * input_scale
+                points = train_data[begin:end, 1:4].to(device) * input_scale
+                weights = train_data[begin:end, 5].to(device)
 
                 latents = torch.index_select(self.latent_vecs, 0, latent_ind)
                 points = torch.cat([latents, points], dim=-1)
 
                 surface_pred = self.network(points).squeeze()
-                surface_pred = torch.clamp(surface_pred, -0.1, 0.1)
+                surface_pred = torch.clamp(
+                    surface_pred, -self.clamp_dist, self.clamp_dist)
                 sdf_values = torch.tanh(sdf_values)
-                sdf_values = torch.clamp(sdf_values, -0.1, 0.1)
+                sdf_values = torch.clamp(
+                    sdf_values, -self.clamp_dist, self.clamp_dist)
 
-                sdf_loss = ((sdf_values - surface_pred).abs()).mean()
+                sdf_loss = (((sdf_values - surface_pred) * weights).abs()).mean()
                 latent_loss = latents.abs().mean()
-                loss = sdf_loss + latent_loss * 1e-4
+                loss = sdf_loss + latent_loss * 1e-3
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -113,6 +118,7 @@ if __name__ == '__main__':
     parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--latent_size", type=int, default=125)
     parser.add_argument("--init_lr", type=float, default=1e-3)
+    parser.add_argument("--clamp_dist", type=float, default=0.1)
     parser.add_argument("--ckpt_freq", type=int, default=-1)
     parser.add_argument("--cpu", action='store_true')
     args = parser.parse_args()
@@ -137,5 +143,6 @@ if __name__ == '__main__':
                              log_dir=args.log_dir,
                              init_lr=args.init_lr,
                              batch_size=args.batch_size,
+                             clamp_dist=args.clamp_dist,
                              device=device)
     trainer.train(args.num_epochs)

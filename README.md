@@ -7,17 +7,16 @@ An attempt to replicate the work of [deep local shapes](https://arxiv.org/abs/20
 |:--:|:--:|
 |![img](.github/depth.png)|![img](.github/normal.png)|
 
-## Pre-requisites
+## Install
 
-1. The newest `Pytorch`, tested with `CUDA 11.1 update 1` :`pip3 install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html`
-2. `Trimesh` for mesh-based sampling: `pip install trimesh pyrender`
+Tested with `CUDA 11.1 update 1` and `Pytorch 1.9`
 
-## Data-preparation
+```
+pip install -f requirements.txt
+```
 
-1. Use `sampler.py` to generate training/evaluation data.
-2. A standalone example can be generated with `python sampler.py input/bun_zipper.ply output/ --voxel_size 0.01`
+## Data Preparation
 
-## Training
-
-1. Use `trainer.py` to train the network.
-2. Use `reconstruct.py` to reconstruct the scene from the learned latents
+1. Use `sampler.py` to generate training/evaluation data. 
+2. We provide two types of sampler: a `MeshSampler` and a `DepthSampler`.
+3. A standalone example can be generated with `python sampler.py input/bun_zipper.ply output/ --voxel_size 0.01`
