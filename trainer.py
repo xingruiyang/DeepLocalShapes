@@ -2,6 +2,7 @@ import argparse
 import os
 
 import torch
+from torch.autograd import grad
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
 
@@ -44,6 +45,18 @@ class NetworkTrainer(object):
             [{'params': network.parameters(), 'lr': init_lr},
              {'params': self.latent_vecs, 'lr': init_lr}])
 
+    def gradient(self, inputs, outputs):
+        d_points = torch.ones_like(
+            outputs, requires_grad=False, device=outputs.device)
+        points_grad = grad(
+            outputs=outputs,
+            inputs=inputs,
+            grad_outputs=d_points,
+            create_graph=True,
+            retain_graph=True,
+            only_inputs=True)[0][:, -3:]
+        return points_grad
+
     def train(self, num_epochs):
         global_steps = 0
         input_scale = 1.0 / self.voxel_size
@@ -77,8 +90,11 @@ class NetworkTrainer(object):
 
                 sdf_loss = (((sdf_values - surface_pred) * weights).abs()).mean()
                 # sdf_loss = (((sdf_values - surface_pred)).abs()).mean()
+                point_grad = self.gradient(points, surface_pred)
+                grad_loss = ((point_grad.norm(2, dim=-1) - 1) ** 2).mean()
                 latent_loss = latents.abs().mean()
-                loss = sdf_loss + latent_loss * 1e-4
+                loss = sdf_loss + 0.1 * grad_loss + latent_loss * 1e-4
+                # loss = sdf_loss + latent_loss * 1e-4
 
                 self.optimizer.zero_grad()
                 loss.backward()

@@ -20,16 +20,16 @@ def to_o3d(arr):
     return pcd
 
 
-def from_o3d(arr):
-    return np.asarray(arr.points)
+def to_numpy(arr):
+    return np.asarray(arr)
 
 
 def est_normal(arr, radius, max_nn=30):
     o3d_arr = to_o3d(arr)
-    o3d.geometry.estimate_normals(
-        o3d_arr, search_param=o3d.geometry.KDTreeSearchParamHybrid(
+    o3d_arr.estimate_normals(
+        search_param=o3d.geometry.KDTreeSearchParamHybrid(
             radius=radius, max_nn=max_nn))
-    return np.asarray(o3d_arr.normals)
+    return to_numpy(o3d_arr.normals)
 
 
 class MeshSampler():
@@ -154,7 +154,7 @@ class DepthSampler():
             depth = self.load_depth_map(filepath, self.downsample, 1000)
 
             pcd, rays = self.get_point_cloud(depth, intr, True)
-            # normal = self.get_normal_map(pcd).reshape(-1, 3)
+            normal = self.get_normal_map(pcd).reshape(-1, 3)
             depth = depth.reshape(-1, 1)
             pcd = pcd.reshape(-1, 3)
             rays = rays.reshape(-1, 3)
@@ -163,14 +163,15 @@ class DepthSampler():
             depth = depth[nonzeros, :]
             rays = rays[nonzeros, :]
             pcd = pcd[nonzeros, :]
-            # normal = normal[nonzeros, :]
-            # normal = np.matmul(
-            #     normal, pose[:3, :3].transpose())
+            normal = normal[nonzeros, :]
+            normal = np.matmul(
+                normal, pose[:3, :3].transpose())
             pcd = np.matmul(
                 pcd, pose[:3, :3].transpose()) + pose[:3, 3]
-            normal = est_normal(pcd, radisu=self.voxel_size)
+            # normal = est_normal(pcd, radius=self.voxel_size, max_nn=100)
+            # print(np.linalg.norm(normal,axis=-1))
 
-            samples = 1-(np.random.rand(rays.shape[0], 1)*0.3)
+            samples = 0.985-(np.random.rand(rays.shape[0], 1)*0.4)
             samples = rays * samples * depth
             samples = np.matmul(
                 samples, pose[:3, :3].transpose()) + pose[:3, 3]
@@ -184,6 +185,7 @@ class DepthSampler():
         surface_points = np.concatenate(surface_points, axis=0)
         surface_normals = np.concatenate(surface_normals, axis=0)
         free_space_samples = np.concatenate(free_space_samples, axis=0)
+        # surface_normals = est_normal(surface_points, radius=self.voxel_size, max_nn=50)
 
         kd_tree = KDTree(surface_points)
         free_space_sdf, _ = kd_tree.query(free_space_samples)
@@ -191,18 +193,20 @@ class DepthSampler():
 
         dist = 0.015
         points = np.concatenate([
-            surface_points,
+            # surface_points,
             surface_points + surface_normals * dist,
             surface_points - surface_normals * dist,
             free_space_samples], axis=0)
         sdf = np.concatenate([
-            np.zeros(surface_points.shape[0]),
+            # np.zeros(surface_points.shape[0]),
             np.zeros(surface_points.shape[0]) + dist,
             np.zeros(surface_points.shape[0]) - dist,
             free_space_sdf], axis=0)
         weights = np.concatenate([
-            point_weights, point_weights,
-            point_weights, point_weights], axis=0)
+            # point_weights, 
+            point_weights,
+            point_weights, 
+            point_weights], axis=0)
         print(points.shape)
         self.display_sdf(points, sdf)
 
