@@ -76,8 +76,9 @@ class NetworkTrainer(object):
                     sdf_values, -self.clamp_dist, self.clamp_dist)
 
                 sdf_loss = (((sdf_values - surface_pred) * weights).abs()).mean()
+                # sdf_loss = (((sdf_values - surface_pred)).abs()).mean()
                 latent_loss = latents.abs().mean()
-                loss = sdf_loss + latent_loss * 1e-3
+                loss = sdf_loss + latent_loss * 1e-4
 
                 self.optimizer.zero_grad()
                 loss.backward()

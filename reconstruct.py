@@ -69,34 +69,34 @@ class ShapeReconstructor(object):
         self.network = network
         self.voxel_size = voxel_size
         self.device = device
-        self.resolution = resolution
+        self.resolution = resolution+1
 
     def interp_border(self, z_array, voxels):
         min_voxel = np.round(np.amin(voxels, axis=0)).astype(int)
         max_voxel = np.round(np.amax(voxels, axis=0)).astype(int)
         grid_size = max_voxel - min_voxel + 1
         grid_sdf = np.zeros(grid_size * (self.resolution-1) + 1)
-        grid_count = np.zeros(grid_size * (self.resolution-1) + 1, dtype=int)
+        grid_sdf[:] = 10000
 
         for i in range(voxels.shape[0]):
             z = z_array[i].reshape(
                 self.resolution, self.resolution, self.resolution)
             voxel = np.round(voxels[i, :]).astype(int) - min_voxel
-            grid_count[voxel[0] * (self.resolution-1):(voxel[0] + 1) * (self.resolution-1) + 1,
-                       voxel[1] * (self.resolution-1):(voxel[1] + 1) * (self.resolution-1) + 1,
-                       voxel[2] * (self.resolution-1):(voxel[2] + 1) * (self.resolution-1) + 1] += 1
-            grid_sdf[voxel[0] * (self.resolution-1):(voxel[0] + 1) * (self.resolution-1) + 1,
-                     voxel[1] * (self.resolution-1):(voxel[1] + 1) * (self.resolution-1) + 1,
-                     voxel[2] * (self.resolution-1):(voxel[2] + 1) * (self.resolution-1) + 1] += z
 
-        grid_count[grid_count == 0] = 1
-        grid_sdf /= grid_count
+            z0 = grid_sdf[voxel[0] * (self.resolution-1):(voxel[0] + 1) * self.resolution - voxel[0],
+                          voxel[1] * (self.resolution-1):(voxel[1] + 1) * self.resolution - voxel[1],
+                          voxel[2] * (self.resolution-1):(voxel[2] + 1) * self.resolution - voxel[2]]
+            z = np.minimum(z0, z)
+            grid_sdf[voxel[0] * (self.resolution-1):(voxel[0] + 1) * self.resolution - voxel[0],
+                     voxel[1] * (self.resolution-1):(voxel[1] + 1) * self.resolution - voxel[1],
+                     voxel[2] * (self.resolution-1):(voxel[2] + 1) * self.resolution - voxel[2]] = z
+
         z_array_interp = []
         for i in range(voxels.shape[0]):
             voxel = np.round(voxels[i, :]).astype(int) - min_voxel
-            z = grid_sdf[voxel[0] * (self.resolution-1):(voxel[0] + 1) * (self.resolution-1) + 1,
-                         voxel[1] * (self.resolution-1):(voxel[1] + 1) * (self.resolution-1) + 1,
-                         voxel[2] * (self.resolution-1):(voxel[2] + 1) * (self.resolution-1) + 1]
+            z = grid_sdf[voxel[0] * (self.resolution-1):(voxel[0] + 1) * self.resolution - voxel[0],
+                         voxel[1] * (self.resolution-1):(voxel[1] + 1) * self.resolution - voxel[1],
+                         voxel[2] * (self.resolution-1):(voxel[2] + 1) * self.resolution - voxel[2]]
             z_array_interp.append(z)
         return z_array_interp
 
