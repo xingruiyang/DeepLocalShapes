@@ -157,6 +157,12 @@ class ShapeReconstructor(object):
         for latent_ind in range(self.voxels.shape[0]):
             grid_pts, xyz = get_grid_points(
                 self.resolution, range=[-.5, .5], device=self.device)
+            if self.centroids is not None:
+                grid_pts -= self.centroids[latent_ind, :] / self.voxel_size
+            if self.orientations is not None:
+                grid_pts = torch.matmul(
+                    grid_pts, self.orientations[latent_ind, ...].transpose(0, 1))
+                    
             latent_vec = self.latent_vecs[latent_ind, :]
             z = get_sdf(self.network, latent_vec, grid_pts)
             z = z.detach().cpu().numpy()
