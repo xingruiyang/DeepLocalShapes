@@ -8,7 +8,8 @@ from torch.utils.data import Dataset
 class SampleDataset(Dataset):
     def __init__(self,
                  data_path: str,
-                 training=True):
+                 orient: bool = False,
+                 training: bool = True):
         super(SampleDataset, self).__init__()
         self.root_path = data_path
         self.training = training
@@ -18,8 +19,13 @@ class SampleDataset(Dataset):
         self.voxel_size = raw_data['voxel_size']
         self.samples = raw_data['samples']
         self.num_latents = self.voxels.shape[0]
-        self.rotations = raw_data.get('rotations', None)
-        self.centroids = raw_data.get('centroids', None)
+
+        if orient:
+            self.rotations = raw_data.get('rotations', None)
+            self.centroids = raw_data.get('centroids', None)
+        else:
+            self.rotations = None
+            self.centroids = None
 
     def load_pickle(self, filename):
         with open(os.path.join(self.root_path, filename), "rb") as f:

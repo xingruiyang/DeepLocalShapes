@@ -1,4 +1,5 @@
 import sys  # noqa
+
 sys.path.insert(0, '/workspace')  # noqa
 
 import argparse
@@ -12,7 +13,7 @@ import trimesh
 from orientation.transformer import PointNetTransformer
 from utils.io_utils import load_model
 
-from mesh_to_sdf import mesh_to_sdf
+import mesh_to_sdf
 
 
 class MeshSampler():
@@ -20,7 +21,8 @@ class MeshSampler():
                  mesh,
                  voxel_size,
                  min_surface_pts=2048,
-                 transformer=None):
+                 transformer=None,
+                 normalize=False):
         self.mesh = mesh
         self.voxel_size = voxel_size
         self.min_surface_pts = min_surface_pts
@@ -29,12 +31,17 @@ class MeshSampler():
             self.transformer = PointNetTransformer()
             load_model(transformer, self.transformer)
             self.transformer.eval()
+        if normalize:
+            self.mesh = self.normalize_mesh(mesh)
 
     def display_sdf(self, pts, sdf):
         color = np.zeros_like(pts)
         color[sdf > 0, 0] = 1
         color[sdf < 0, 2] = 1
         trimesh.PointCloud(pts, color).show()
+
+    def normalize_mesh(self, mesh):
+        return mesh_to_sdf.scale_to_unit_cube(mesh)
 
     def get_centroid_and_orientation(self, pts):
         voxel_surface = pts[np.random.permutation(pts.shape[0]), :]
@@ -97,7 +104,6 @@ class MeshSampler():
             vsample[:, 1:4] = voxel_pts
             vsample[:, 4] = voxel_sdf
             vsample[:, 5] = 1
-            vsample = vsample.astype(np.float32)
             samples.append(vsample)
 
         print("total of {} voxels sampled with {} oriented".format(
@@ -112,14 +118,17 @@ if __name__ == '__main__':
     parser.add_argument('output', type=str)
     parser.add_argument('--voxel_size', type=float, default=0.1)
     parser.add_argument('--min_surface_pts', type=int, default=2048)
-    parser.add_argument('--num_samples', type=int, default=250000)
+    parser.add_argument('--num_samples', type=int, default=1000000)
     parser.add_argument('--transformer', type=str, default=None)
+    parser.add_argument('--normalize', action='store_true')
     args = parser.parse_args()
 
     mesh = trimesh.load(args.input)
     sampler = MeshSampler(
         mesh, args.voxel_size,
-        args.min_surface_pts, args.transformer)
+        args.min_surface_pts,
+        args.transformer,
+        args.normalize)
 
     samples, voxels, centroids, rotations = sampler.sample_sdf()
     if not os.path.exists(args.output):

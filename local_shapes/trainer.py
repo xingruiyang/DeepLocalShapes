@@ -41,8 +41,10 @@ class NetworkTrainer(object):
         self.ckpt_freq = ckpt_freq
         self.batch_size = batch_size
         self.clamp_dist = clamp_dist
-        self.centroids = torch.from_numpy(centroids).float()
-        self.orientations = torch.from_numpy(orientations).float()
+        self.centroids = torch.from_numpy(
+            centroids).float() if centroids is not None else None
+        self.orientations = torch.from_numpy(
+            orientations).float()if orientations is not None else None
         self.num_batch = (train_data.shape[0]-1)//batch_size+1
         self.train_data = torch.from_numpy(train_data).float()
 
@@ -83,17 +85,21 @@ class NetworkTrainer(object):
 
                 latent_ind = train_data[begin:end, 0].to(device).int()
                 sdf_values = train_data[begin:end, 4].to(device) * input_scale
-                points = train_data[begin:end, 1:4].to(device) 
+                points = train_data[begin:end, 1:4].to(device)
                 weights = train_data[begin:end, 5].to(device)
-                centre = torch.index_select(
-                    self.centroids.to(device), 0, latent_ind)
-                orient = torch.index_select(
-                    self.orientations.to(device), 0, latent_ind)
                 latents = torch.index_select(self.latent_vecs, 0, latent_ind)
 
-                points -= centre
-                points = torch.matmul(
-                    points[:, None, :], orient.transpose(1, 2))
+                if self.centroids is not None:
+                    centre = torch.index_select(
+                        self.centroids.to(device), 0, latent_ind)
+                    points -= centre
+
+                if self.orientations is not None:
+                    orient = torch.index_select(
+                        self.orientations.to(device), 0, latent_ind)
+                    points = torch.matmul(
+                        points[:, None, :], orient.transpose(1, 2))
+                        
                 points *= input_scale
                 points = torch.cat([latents, points.squeeze()], dim=-1)
 
@@ -166,7 +172,7 @@ if __name__ == '__main__':
     net_args = {"d_in": args.latent_size + 3, "dims": [128, 128, 128]}
     network = ImplicitNet(**net_args).to(device)
 
-    dataset = SampleDataset(args.data, True)
+    dataset = SampleDataset(args.data, args.orient, True)
     latent_vecs = torch.zeros((dataset.num_latents, args.latent_size))
     latent_vecs = latent_vecs.to(device)
     torch.nn.init.normal_(latent_vecs, 0, 0.01**2)

@@ -75,8 +75,10 @@ class ShapeReconstructor(object):
         self.voxel_size = voxel_size
         self.device = device
         self.resolution = resolution+1
-        self.centroids = torch.from_numpy(centroids).to(device).float()
-        self.orientations = torch.from_numpy(orientations).to(device).float()
+        self.centroids = torch.from_numpy(centroids).to(
+            device).float() if centroids is not None else None
+        self.orientations = torch.from_numpy(orientations).to(
+            device).float() if orientations is not None else None
 
     def interp_border(self, z_array, voxels):
         min_voxel = np.round(np.amin(voxels, axis=0)).astype(int)
