@@ -207,7 +207,7 @@ if __name__ == '__main__':
     load_model(args.network, network, device)
     latent_vecs = load_latents(args.latents, device)
 
-    dataset = SampleDataset(args.data,  False)
+    dataset = SampleDataset(args.data, args.orient, False)
     num_latents = dataset.num_latents
     voxel_size = dataset.voxel_size
     reconstructor = ShapeReconstructor(
