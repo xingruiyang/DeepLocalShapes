@@ -188,7 +188,7 @@ class DepthSampler():
         point_weights = []
         rand_weights = []
         for ind, (key, val) in enumerate(assoc.items()):
-            if ind % args.skip_frames != 0 or ind > 100:
+            if ind % args.skip_frames != 0:# or ind > 100:
                 continue
 
             pose = trajectory[key]
@@ -201,8 +201,7 @@ class DepthSampler():
             depth = depth.reshape(-1, 1)
             pcd = pcd.reshape(-1, 3)
             rays = rays.reshape(-1, 3)
-            nonzeros = np.logical_and(
-                pcd[:, 2] != 0, pcd[:, 2] < self.depth_limit)
+            nonzeros = depth[:,0] != 0
             depth = depth[nonzeros, :]
             rays = rays[nonzeros, :]
             pcd = pcd[nonzeros, :]
@@ -211,7 +210,7 @@ class DepthSampler():
                 normal, pose[:3, :3].transpose())
             pcd = np.matmul(
                 pcd, pose[:3, :3].transpose()) + pose[:3, 3]
-            rand_pts = 0.985-(np.random.rand(rays.shape[0], 1)*0.4)
+            rand_pts = 0.99-(np.random.rand(rays.shape[0], 1)*0.4)
             rand_pts = rays * rand_pts * depth
             rand_pts = np.matmul(
                 rand_pts, pose[:3, :3].transpose()) + pose[:3, 3]
@@ -223,15 +222,15 @@ class DepthSampler():
             rand_weight = weight[randpick, :]
 
             free_space_samples.append(rand_pts)
-            point_weights.append(1.0/depth)
+            point_weights.append(weight)
             rand_weights.append(rand_weight)
             surface_points.append(pcd)
             surface_normals.append(normal)
         point_weights = np.concatenate(point_weights, axis=0)
         surface_points = np.concatenate(surface_points, axis=0)
         surface_normals = np.concatenate(surface_normals, axis=0)
-        free_space_samples = np.concatenate(free_space_samples, axis=0)
         free_space_weights = np.concatenate(rand_weights, axis=0)
+        free_space_samples = np.concatenate(free_space_samples, axis=0)
 
         print(
             "contstructing KD-Tree with {} points".format(surface_points.shape[0]))
@@ -241,7 +240,7 @@ class DepthSampler():
         free_space_sdf, _ = kd_tree.query(free_space_samples)
         free_space_sdf = free_space_sdf[:, 0]
 
-        dist1 = 0.015
+        dist1 = 0.01
         dist2 = 0.005
         points = np.concatenate([
             # surface_points,
@@ -269,7 +268,7 @@ class DepthSampler():
         ], axis=0).squeeze()
         print(weights.shape)
         print("We get {} points".format(points.shape[0]))
-        self.display_sdf(points, sdf)
+        # self.display_sdf(points, sdf)
 
         voxels = surface_points // self.voxel_size
         voxels = np.unique(voxels, axis=0)

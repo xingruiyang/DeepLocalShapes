@@ -147,6 +147,15 @@ class ShapeReconstructor(object):
         mesh_verts = np.concatenate(mesh_verts, axis=0)
         mesh_faces = np.concatenate(mesh_faces, axis=0)
         recon_shape = m.Trimesh(mesh_verts, mesh_faces)
+        # print(recon_shape.vertex_normals*0.5+0.5)
+        colors = -recon_shape.vertex_normals #*0.5+0.5
+        colors[:, :2] *= -1
+        colors = colors * 0.5 + 0.5
+        recon_shape.visual.vertex_colors=colors
+        # print(recon_shape.face_normals)
+        # recon_shape = m.Trimesh(
+        #     mesh_verts, mesh_faces,
+        #     face_colors=recon_shape.face_normals*0.5+0.5)
         return recon_shape
 
     def reconstruct(self):
@@ -162,7 +171,7 @@ class ShapeReconstructor(object):
             if self.orientations is not None:
                 grid_pts = torch.matmul(
                     grid_pts, self.orientations[latent_ind, ...].transpose(0, 1))
-                    
+
             latent_vec = self.latent_vecs[latent_ind, :]
             z = get_sdf(self.network, latent_vec, grid_pts)
             z = z.detach().cpu().numpy()
