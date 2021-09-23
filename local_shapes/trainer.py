@@ -110,9 +110,8 @@ class NetworkTrainer(object):
                 sdf_values = torch.clamp(
                     sdf_values, -self.clamp_dist, self.clamp_dist)
 
-                sdf_loss = (((sdf_values - surface_pred)
-                             * weights).abs()).mean()
-                sdf_loss = (((sdf_values - surface_pred)).abs()).mean()
+                sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
+                # sdf_loss = (((sdf_values-surface_pred)).abs()).mean()
                 # point_grad = self.gradient(points, surface_pred)
                 # grad_loss = ((point_grad.norm(2, dim=-1) - 1) ** 2).mean()
                 latent_loss = latents.abs().mean()

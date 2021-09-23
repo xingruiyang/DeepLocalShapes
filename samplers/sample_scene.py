@@ -14,7 +14,6 @@ import trimesh
 from orientation.transformer import PointNetTransformer
 from sklearn.neighbors import KDTree
 from utils.io_utils import load_model
-from sklearn.neighbors import NearestNeighbors
 
 _EPS = np.finfo(float).eps * 4.0
 
@@ -187,8 +186,9 @@ class DepthSampler():
         surface_normals = []
         free_space_samples = []
         point_weights = []
+        rand_weights = []
         for ind, (key, val) in enumerate(assoc.items()):
-            if ind % args.skip_frames != 0:
+            if ind % args.skip_frames != 0 or ind > 100:
                 continue
 
             pose = trajectory[key]
@@ -211,45 +211,65 @@ class DepthSampler():
                 normal, pose[:3, :3].transpose())
             pcd = np.matmul(
                 pcd, pose[:3, :3].transpose()) + pose[:3, 3]
-            samples = 0.985-(np.random.rand(rays.shape[0], 1)*0.4)
-            samples = rays * samples * depth
-            samples = np.matmul(
-                samples, pose[:3, :3].transpose()) + pose[:3, 3]
+            rand_pts = 0.985-(np.random.rand(rays.shape[0], 1)*0.4)
+            rand_pts = rays * rand_pts * depth
+            rand_pts = np.matmul(
+                rand_pts, pose[:3, :3].transpose()) + pose[:3, 3]
 
-            free_space_samples.append(samples)
+            weight = 1.0 / depth
+            randpick = np.random.permutation(rand_pts.shape[0])[
+                :rand_pts.shape[0]//8]
+            rand_pts = rand_pts[randpick, :]
+            rand_weight = weight[randpick, :]
+
+            free_space_samples.append(rand_pts)
             point_weights.append(1.0/depth)
+            rand_weights.append(rand_weight)
             surface_points.append(pcd)
             surface_normals.append(normal)
         point_weights = np.concatenate(point_weights, axis=0)
         surface_points = np.concatenate(surface_points, axis=0)
         surface_normals = np.concatenate(surface_normals, axis=0)
         free_space_samples = np.concatenate(free_space_samples, axis=0)
+        free_space_weights = np.concatenate(rand_weights, axis=0)
 
-        print("contstructing KD-Tree with {} points".format(surface_points.shape[0]))
+        print(
+            "contstructing KD-Tree with {} points".format(surface_points.shape[0]))
         kd_tree = KDTree(surface_points)
-        print("querying KD-Tree with {} points".format(free_space_samples.shape[0]))
+        print(
+            "querying KD-Tree with {} points".format(free_space_samples.shape[0]))
         free_space_sdf, _ = kd_tree.query(free_space_samples)
         free_space_sdf = free_space_sdf[:, 0]
 
-        dist = 0.015
+        dist1 = 0.015
+        dist2 = 0.005
         points = np.concatenate([
-            surface_points,
-            surface_points + surface_normals * dist,
-            surface_points - surface_normals * dist,
+            # surface_points,
+            surface_points + surface_normals * dist1,
+            surface_points - surface_normals * dist1,
+            surface_points + surface_normals * dist2,
+            surface_points - surface_normals * dist2,
             free_space_samples
         ], axis=0)
         sdf = np.concatenate([
-            np.zeros(surface_points.shape[0]),
-            np.zeros(surface_points.shape[0]) + dist,
-            np.zeros(surface_points.shape[0]) - dist,
+            # np.zeros(surface_points.shape[0]),
+            np.zeros(surface_points.shape[0]) + dist1,
+            np.zeros(surface_points.shape[0]) - dist1,
+            np.zeros(surface_points.shape[0]) + dist2,
+            np.zeros(surface_points.shape[0]) - dist2,
             free_space_sdf
         ], axis=0)
         weights = np.concatenate([
-            point_weights, point_weights,
-            point_weights, point_weights
+            # point_weights,
+            point_weights,
+            point_weights,
+            point_weights,
+            point_weights,
+            free_space_weights
         ], axis=0).squeeze()
+        print(weights.shape)
         print("We get {} points".format(points.shape[0]))
-        # self.display_sdf(points, sdf)
+        self.display_sdf(points, sdf)
 
         voxels = surface_points // self.voxel_size
         voxels = np.unique(voxels, axis=0)
