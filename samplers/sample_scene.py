@@ -1,3 +1,6 @@
+import sys  # noqa
+
+sys.path.insert(0, '/workspace')  # noqa
 import argparse
 import glob
 import os
@@ -8,17 +11,37 @@ import natsort
 import numpy as np
 import torch
 import trimesh
+from orientation.transformer import PointNetTransformer
 from sklearn.neighbors import KDTree
+from utils.io_utils import load_model
+from sklearn.neighbors import NearestNeighbors
+
 _EPS = np.finfo(float).eps * 4.0
 
 
 class DepthSampler():
-    def __init__(self, scene_path, downsample, skip_frames, voxel_size, depth_limit):
+    def __init__(
+            self,
+            scene_path: str,
+            downsample: int,
+            skip_frames: int,
+            voxel_size: float,
+            depth_limit: float,
+            min_surface_pts: int = 2048,
+            transformer=None,
+            device=torch.device('cpu')):
         self.scene_path = scene_path
         self.downsample = downsample
         self.voxel_size = voxel_size
         self.skip_frames = skip_frames
         self.depth_limit = depth_limit
+        self.transformer = transformer
+        self.min_surface_pts = min_surface_pts
+        self.device = device
+        if transformer is not None:
+            self.transformer = PointNetTransformer().to(device)
+            load_model(transformer, self.transformer, device)
+            self.transformer.eval()
 
     def get_voxels(self, pts):
         voxels = pts // self.voxel_size
@@ -37,6 +60,10 @@ class DepthSampler():
         return dict(list)
 
     def display_sdf(self, pts, sdf):
+        if isinstance(pts, torch.Tensor):
+            pts = pts.detach().cpu().numpy()
+        if isinstance(sdf, torch.Tensor):
+            sdf = sdf.detach().cpu().numpy()
         color = np.zeros_like(pts)
         color[sdf > 0, 0] = 1
         color[sdf < 0, 2] = 1
@@ -54,17 +81,30 @@ class DepthSampler():
         else:
             return pcd
 
+    def get_centroid_and_orientation(self, pts):
+        voxel_surface = pts[torch.randperm(
+            pts.shape[0]), :][:self.min_surface_pts, :]
+        centroid = torch.mean(voxel_surface, dim=0)
+        volume_surface = (voxel_surface-centroid) / (1.5*self.voxel_size)
+        volume_surface = volume_surface[None, ...]
+        orientation = self.transformer(
+            volume_surface, transpose_input=True)
+        return centroid, orientation[0, ...]
+
     def normalized(self, a, axis=-1, order=2):
         l2 = np.linalg.norm(a, order, axis)
         l2[l2 == 0] = 1
         return a / np.expand_dims(l2, axis)
 
-    def get_normal_map(self, pcd):
+    def get_normal_map(self, pcd, inv_y_axis=False):
         dx = np.zeros_like(pcd)
         dy = np.zeros_like(pcd)
         dx[:-1, ...] = pcd[1:, :, :] - pcd[:-1, :, :]
         dy[:, :-1, :] = pcd[:, 1:, :] - pcd[:, :-1, :]
-        normal = np.cross(dx, dy, axis=-1)
+        if inv_y_axis:
+            normal = np.cross(dy, dx, axis=-1)
+        else:
+            normal = np.cross(dx, dy, axis=-1)
         normal = self.normalized(normal)
         return normal
 
@@ -74,7 +114,8 @@ class DepthSampler():
         depth[depth > 10] = 0
         if down_scale != 0:
             shape = [s // 2**down_scale for s in depth.shape]
-            depth = cv2.resize(depth, shape[::-1], interpolation=cv2.INTER_NEAREST)
+            depth = cv2.resize(
+                depth, shape[::-1], interpolation=cv2.INTER_NEAREST)
         return depth
 
     def transform44(self, l):
@@ -135,6 +176,7 @@ class DepthSampler():
         intr //= (2**self.downsample)
         intr[2, 2] = 1
         depth_scale = calib[4]
+        inv_y_axis = calib[1] < 0
 
         assoc = self.read_file_list(os.path.join(
             self.scene_path, 'assoc/assoc.txt'))
@@ -155,7 +197,7 @@ class DepthSampler():
                 depth_filename, self.downsample, depth_scale)
 
             pcd, rays = self.get_point_cloud(depth, intr, True)
-            normal = self.get_normal_map(pcd).reshape(-1, 3)
+            normal = self.get_normal_map(pcd, inv_y_axis).reshape(-1, 3)
             depth = depth.reshape(-1, 1)
             pcd = pcd.reshape(-1, 3)
             rays = rays.reshape(-1, 3)
@@ -169,117 +211,101 @@ class DepthSampler():
                 normal, pose[:3, :3].transpose())
             pcd = np.matmul(
                 pcd, pose[:3, :3].transpose()) + pose[:3, 3]
-            trimesh.PointCloud(pcd).show()
+            samples = 0.985-(np.random.rand(rays.shape[0], 1)*0.4)
+            samples = rays * samples * depth
+            samples = np.matmul(
+                samples, pose[:3, :3].transpose()) + pose[:3, 3]
 
-        # for index in range(0, len(depth_files), args.skip_frames):
-        #     filepath = depth_files[index]
-        #     pose_path = os.path.join(
-        #         self.scene_path, 'seq-01/frame-{:06d}.pose.txt'.format(index))
-        #     pose = np.loadtxt(pose_path).astype(float)
-        #     depth = self.load_depth_map(filepath, self.downsample, 1000)
+            free_space_samples.append(samples)
+            point_weights.append(1.0/depth)
+            surface_points.append(pcd)
+            surface_normals.append(normal)
+        point_weights = np.concatenate(point_weights, axis=0)
+        surface_points = np.concatenate(surface_points, axis=0)
+        surface_normals = np.concatenate(surface_normals, axis=0)
+        free_space_samples = np.concatenate(free_space_samples, axis=0)
 
-        #     pcd, rays = self.get_point_cloud(depth, intr, True)
-        #     normal = self.get_normal_map(pcd).reshape(-1, 3)
-        #     depth = depth.reshape(-1, 1)
-        #     pcd = pcd.reshape(-1, 3)
-        #     rays = rays.reshape(-1, 3)
-        #     nonzeros = np.logical_and(
-        #         pcd[:, 2] != 0, pcd[:, 2] < self.depth_limit)
-        #     depth = depth[nonzeros, :]
-        #     rays = rays[nonzeros, :]
-        #     pcd = pcd[nonzeros, :]
-        #     normal = normal[nonzeros, :]
-        #     normal = np.matmul(
-        #         normal, pose[:3, :3].transpose())
-        #     pcd = np.matmul(
-        #         pcd, pose[:3, :3].transpose()) + pose[:3, 3]
+        print("contstructing KD-Tree with {} points".format(surface_points.shape[0]))
+        kd_tree = KDTree(surface_points)
+        print("querying KD-Tree with {} points".format(free_space_samples.shape[0]))
+        free_space_sdf, _ = kd_tree.query(free_space_samples)
+        free_space_sdf = free_space_sdf[:, 0]
 
-        #     samples = 1-(np.random.rand(rays.shape[0], 1)*0.5)
-        #     samples = rays * samples * depth
-        #     samples = np.matmul(
-        #         samples, pose[:3, :3].transpose()) + pose[:3, 3]
+        dist = 0.015
+        points = np.concatenate([
+            surface_points,
+            surface_points + surface_normals * dist,
+            surface_points - surface_normals * dist,
+            free_space_samples
+        ], axis=0)
+        sdf = np.concatenate([
+            np.zeros(surface_points.shape[0]),
+            np.zeros(surface_points.shape[0]) + dist,
+            np.zeros(surface_points.shape[0]) - dist,
+            free_space_sdf
+        ], axis=0)
+        weights = np.concatenate([
+            point_weights, point_weights,
+            point_weights, point_weights
+        ], axis=0).squeeze()
+        print("We get {} points".format(points.shape[0]))
+        # self.display_sdf(points, sdf)
 
-        #     free_space_samples.append(samples)
-        #     point_weights.append(1.0/depth)
-        #     surface_points.append(pcd)
-        #     surface_normals.append(normal)
+        voxels = surface_points // self.voxel_size
+        voxels = np.unique(voxels, axis=0)
+        voxels += 0.5
+        voxels *= self.voxel_size
 
-        # point_weights = np.concatenate(point_weights, axis=0)
-        # surface_points = np.concatenate(surface_points, axis=0)
-        # surface_normals = np.concatenate(surface_normals, axis=0)
-        # free_space_samples = np.concatenate(free_space_samples, axis=0)
+        samples = []
+        centroids = []
+        rotations = []
+        num_oriented_voxels = 0
+        with torch.no_grad():
+            voxels = torch.from_numpy(voxels).float().to(self.device)
+            sdf = torch.from_numpy(sdf).float().to(self.device)
+            points = torch.from_numpy(points).float().to(self.device)
+            weights = torch.from_numpy(weights).float().to(self.device)
+            surface_points = torch.from_numpy(
+                surface_points).float().to(self.device)
+            for vid in range(voxels.shape[0]):
+                print("{}/{}".format(vid, voxels.shape[0]))
+                voxel_pts = points - voxels[vid, :]
+                dist = torch.norm(voxel_pts, p=np.inf, dim=-1)
+                selector = dist < (1.5 * self.voxel_size)
+                voxel_pts = voxel_pts[selector, :]
+                voxel_sdf = sdf[selector]
+                voxel_weights = weights[selector]
 
-        # kd_tree = KDTree(surface_points)
-        # free_space_sdf, _ = kd_tree.query(free_space_samples)
-        # free_space_sdf = free_space_sdf[:, 0]
+                voxel_surface = surface_points - voxels[vid, :]
+                dist = torch.norm(voxel_surface, p=np.inf, dim=-1)
+                selector = dist < (1.5 * self.voxel_size)
+                voxel_surface = voxel_surface[selector, :]
 
-        # dist = 0.015
-        # points = np.concatenate([
-        #     surface_points,
-        #     surface_points + surface_normals * dist,
-        #     surface_points - surface_normals * dist,
-        #     free_space_samples
-        # ], axis=0)
-        # sdf = np.concatenate([
-        #     np.zeros(surface_points.shape[0]),
-        #     np.zeros(surface_points.shape[0]) + dist,
-        #     np.zeros(surface_points.shape[0]) - dist,
-        #     free_space_sdf
-        # ], axis=0)
-        # weights = np.concatenate([
-        #     point_weights, point_weights,
-        #     point_weights, point_weights
-        # ], axis=0)
-        # print(points.shape)
-        # # self.display_sdf(points, sdf)
+                centroid = torch.zeros((3,))
+                orientation = torch.eye(3)
+                if self.transformer is not None:
+                    if voxel_surface.shape[0] > self.min_surface_pts:
+                        centroid, orientation = self.get_centroid_and_orientation(
+                            voxel_surface)
+                        num_oriented_voxels += 1
+                    else:
+                        centroid = torch.mean(voxel_surface, dim=0)
+                centroids.append(centroid.detach().cpu().numpy())
+                rotations.append(orientation.detach().cpu().numpy())
+                # self.display_sdf(voxel_pts, voxel_sdf)
 
-        # with torch.no_grad():
-        #     samples = []
-        #     centroids = []
-        #     rotations = []
-        #     num_oriented_voxels = 0
-        #     for vid in range(voxels.shape[0]):
-        #         voxels = torch.from_numpy(voxels).float().cuda()
-        #         sdf = torch.from_numpy(sdf).float().cuda()
-        #         points = torch.from_numpy(points).float().cuda()
-        #         weights = torch.from_numpy(weights).float().cuda()
-        #         voxel_pts = points - voxels[vid, :]
-        #         dist = np.linalg.norm(voxel_pts, ord=np.inf, axis=-1)
-        #         selector = dist < (1.5 * self.voxel_size)
-        #         voxel_pts = voxel_pts[selector, :]
-        #         voxel_sdf = sdf[selector]
+                vsample = torch.zeros((voxel_pts.shape[0], 6)).to(self.device)
+                vsample[:, 0] = float(vid)
+                vsample[:, 1:4] = voxel_pts
+                vsample[:, 4] = voxel_sdf
+                vsample[:, 5] = voxel_weights
+                samples.append(vsample.detach().cpu().numpy())
+                #np.save(os.path.join(args.output, "{}.npy".format(vid)), vsample)
 
-        #         voxel_surface = surface_points - voxels[vid, :]
-        #         dist = np.linalg.norm(voxel_surface, ord=np.inf, axis=-1)
-        #         selector = dist < (1.5 * self.voxel_size)
-        #         voxel_surface = voxel_surface[selector, :]
-
-        #         centre = np.zeros((3, 1))
-        #         orientation = np.eye(3)
-        #         if self.transformer is not None:
-        #             if voxel_surface.shape[0] > self.min_surface_pts:
-        #                 centre, orientation = self.get_centroid_and_orientation(
-        #                     voxel_surface)
-        #                 num_oriented_voxels += 1
-        #             else:
-        #                 centre = np.mean(voxel_surface, axis=0)
-        #         centroids.append(centre)
-        #         rotations.append(orientation)
-
-        #         # self.display_sdf(voxel_pts, voxel_sdf)
-
-        #         vsample = np.zeros((voxel_pts.shape[0], 6))
-        #         vsample[:, 0] = float(vid)
-        #         vsample[:, 1:4] = voxel_pts
-        #         vsample[:, 4] = voxel_sdf
-        #         vsample[:, 5] = 1
-        #         # samples.append(vsample)
-        #         np.save(os.path.join(args.output, "{}.npy".format(vid)), vsample)
-
-        # print("total of {} voxels sampled with {} oriented".format(
-        #     voxels.shape[0], num_oriented_voxels))
-        # samples = np.concatenate(samples, axis=0)
-        # return samples, voxels, centroids, rotations
+        print("total of {} voxels sampled with {} oriented".format(
+            voxels.shape[0], num_oriented_voxels))
+        samples = np.concatenate(samples, axis=0)
+        return samples, voxels, centroids, rotations
 
 
 if __name__ == '__main__':
@@ -290,21 +316,33 @@ if __name__ == '__main__':
     parser.add_argument('--depth_limit', type=float, default=10)
     parser.add_argument('--downsample', type=int, default=0)
     parser.add_argument('--skip_frames', type=int, default=10)
+    parser.add_argument('--min_surface_pts', type=int, default=2048)
+    parser.add_argument('--transformer', type=str, default=None)
     parser.add_argument('--num_samples', type=int, default=1000000)
+    parser.add_argument("--cpu", action='store_true')
     args = parser.parse_args()
+
+    device = torch.device('cuda:0' if (
+        (not args.cpu) and torch.cuda.is_available()) else 'cpu')
 
     sampler = DepthSampler(
         args.input, args.downsample,
         args.skip_frames, args.voxel_size,
-        args.depth_limit)
+        args.depth_limit, args.min_surface_pts,
+        args.transformer, device)
 
-    samples, voxels = sampler.sample_sdf()
+    samples, voxels, centroids, rotations = sampler.sample_sdf()
     if not os.path.exists(args.output):
         os.makedirs(args.output, exist_ok=True)
 
     out = dict()
-    out['voxels'] = voxels
-    out['samples'] = samples
+    # samples.astype(np.float32)
+    out['samples'] = os.path.join(args.output, 'samples.npy')
+    out['voxels'] = voxels.detach().cpu().numpy().astype(np.float32)
+    out['centroids'] = np.stack(centroids, axis=0).astype(np.float32)
+    out['rotations'] = np.stack(rotations, axis=0).astype(np.float32)
     out['voxel_size'] = args.voxel_size
-    with open(os.path.join(args.output, "sample.pkl"), "wb") as f:
-        pickle.dump(out, f)
+    with open(os.path.join(args.output, "samples.pkl"), "wb") as f:
+        pickle.dump(out, f,  pickle.HIGHEST_PROTOCOL)
+    np.save(os.path.join(args.output, 'samples.npy'),
+            samples.astype(np.float32))

@@ -14,11 +14,17 @@ class SampleDataset(Dataset):
         self.root_path = data_path
         self.training = training
 
-        raw_data = self.load_pickle('sample.pkl')
+        raw_data = self.load_pickle('samples.pkl')
         self.voxels = raw_data['voxels']
         self.voxel_size = raw_data['voxel_size']
-        self.samples = raw_data['samples']
+
         self.num_latents = self.voxels.shape[0]
+
+        if training:
+            train_data = raw_data['samples']
+            self.samples = np.load(train_data)
+        else:
+            self.samples = None
 
         if orient:
             self.rotations = raw_data.get('rotations', None)

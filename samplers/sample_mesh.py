@@ -44,7 +44,8 @@ class MeshSampler():
         return mesh_to_sdf.scale_to_unit_cube(mesh)
 
     def get_centroid_and_orientation(self, pts):
-        voxel_surface = pts[np.random.permutation(pts.shape[0]), :]
+        voxel_surface = pts[np.random.permutation(
+            pts.shape[0]), :][:self.min_surface_pts, :]
         centre = np.mean(voxel_surface, axis=0)
         volume_surface = (voxel_surface-centre) / (1.5*self.voxel_size)
         volume_surface = torch.from_numpy(volume_surface)

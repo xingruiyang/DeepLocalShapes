@@ -117,7 +117,7 @@ class NetworkTrainer(object):
                 # grad_loss = ((point_grad.norm(2, dim=-1) - 1) ** 2).mean()
                 latent_loss = latents.abs().mean()
                 # loss = sdf_loss + 0.1 * grad_loss + latent_loss * 1e-4
-                loss = sdf_loss + latent_loss * 1e-4
+                loss = sdf_loss + latent_loss * 1e-3
 
                 self.optimizer.zero_grad()
                 loss.backward()
