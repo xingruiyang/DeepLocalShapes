@@ -68,10 +68,17 @@ class ShapeReconstructor(object):
         self.voxel_size = voxel_size
         self.device = device
         self.resolution = resolution+1
-        self.centroids = torch.from_numpy(centroids).to(
-            device).float() if centroids is not None else None
-        self.orientations = torch.from_numpy(orientations).to(
-            device).float() if orientations is not None else None
+        if isinstance(centroids, np.ndarray):
+            self.centroids = torch.from_numpy(
+                centroids).to(device).float()
+        else:
+            self.centroids = centroids
+
+        if isinstance(orientations, np.ndarray):
+            self.orientations = torch.from_numpy(
+                orientations).to(device).float()
+        else:
+            self.orientations = orientations
 
     def interp_border(self, z_array, voxels):
         min_voxel = np.round(np.amin(voxels, axis=0)).astype(int)
@@ -102,7 +109,7 @@ class ShapeReconstructor(object):
             z_array_interp.append(z)
         return z_array_interp
 
-    def reconstruct_interp(self):
+    def reconstruct_interp(self, return_raw=False):
         self.network.eval()
         z_array = []
         mesh_verts = []
@@ -139,7 +146,11 @@ class ShapeReconstructor(object):
 
         mesh_verts = np.concatenate(mesh_verts, axis=0)
         mesh_faces = np.concatenate(mesh_faces, axis=0)
-        recon_shape = m.Trimesh(mesh_verts, mesh_faces)
+
+        if not return_raw:
+            return m.Trimesh(mesh_verts, mesh_faces)
+        else:
+            return m.Trimesh(mesh_verts, mesh_faces), mesh_verts, mesh_faces
         # print(recon_shape.vertex_normals*0.5+0.5)
         # colors = recon_shape.vertex_normals #*0.5+0.5
         # colors[:, :2] *= -1
@@ -149,7 +160,7 @@ class ShapeReconstructor(object):
         # recon_shape = m.Trimesh(
         #     mesh_verts, mesh_faces,
         #     face_colors=recon_shape.face_normals*0.5+0.5)
-        return recon_shape
+        # return recon_shape
 
     def reconstruct(self):
         self.network.eval()

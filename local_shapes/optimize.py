@@ -54,7 +54,7 @@ class LatentOptimizer(object):
         torch.nn.init.normal_(self.latent_vecs, 0, 0.01**2)
 
     def __call__(self, num_epochs):
-        self.network.eval()
+        self.network.train()
         global_steps = 0
         input_scale = 1.0 / self.voxel_size
         for n_iter in range(num_epochs):
