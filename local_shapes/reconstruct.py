@@ -17,8 +17,7 @@ from utils import load_latents, load_model
 import pyrender  # noqa
 
 
-def get_grid_points(resolution, rotation=None, centroid=None, translate=None,
-                    uniform=True, range=[-1, 1], device=torch.device('cpu')):
+def get_grid_points(resolution, uniform=True, range=[-1, 1], device=torch.device('cpu')):
     if uniform:
         x = y = z = torch.linspace(range[0], range[1], resolution)
         xx, yy, zz = torch.meshgrid(x, y, z)
@@ -28,12 +27,6 @@ def get_grid_points(resolution, rotation=None, centroid=None, translate=None,
     else:
         raise NotImplementedError()
 
-    if translate is not None:
-        grid_points += translate
-    if centroid is not None:
-        grid_points -= centroid
-    if rotation is not None:
-        grid_points = torch.matmul(grid_points, rotation.transpose(0, 1))
     return grid_points, xyz
 
 
@@ -148,9 +141,9 @@ class ShapeReconstructor(object):
         mesh_faces = np.concatenate(mesh_faces, axis=0)
         recon_shape = m.Trimesh(mesh_verts, mesh_faces)
         # print(recon_shape.vertex_normals*0.5+0.5)
-        colors = recon_shape.vertex_normals #*0.5+0.5
+        # colors = recon_shape.vertex_normals #*0.5+0.5
         # colors[:, :2] *= -1
-        colors = colors * 0.5 + 0.5
+        # colors = colors * 0.5 + 0.5
         # recon_shape.visual.vertex_colors=colors
         # print(recon_shape.face_normals)
         # recon_shape = m.Trimesh(

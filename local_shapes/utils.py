@@ -82,13 +82,3 @@ def log_progress(step, total, prefix="", suffix=""):
     if step == total:
         print()
 
-
-def log_progress(step, total, prefix="", suffix=""):
-    fill = '█'
-    bar_length = 30
-    percent = ("{0:.2f}").format(100 * (step / float(total)))
-    filled = int(bar_length * step // total)
-    bar = fill * filled + '-' * (bar_length - filled)
-    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end="\r")
-    if step == total:
-        print()

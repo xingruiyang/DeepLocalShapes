@@ -66,7 +66,7 @@ if __name__ == '__main__':
     parser.add_argument('input1', type=str)
     parser.add_argument('input2', type=str)
     parser.add_argument('--normalize', action='store_true')
-    parser.add_argument('--num_samples', type=int, default=2**16)
+    parser.add_argument('--num_samples', type=int, default=2**12)
     args = parser.parse_args()
 
     mesh1 = trimesh.load(args.input1)
@@ -77,7 +77,9 @@ if __name__ == '__main__':
 
     point_cloud1 = mesh1.sample(args.num_samples)
     point_cloud2 = mesh2.sample(args.num_samples)
-    print("1to2: {} 2to1: {} bi: {}".format(
+    # point_cloud1 = mesh1.vertices
+    # point_cloud2 = mesh2.vertices
+    print("{} {} {}".format(
         chamfer_distance(point_cloud1, point_cloud2, direction='x_to_y'),
         chamfer_distance(point_cloud1, point_cloud2, direction='y_to_x'),
         chamfer_distance(point_cloud1, point_cloud2, direction='bi')))

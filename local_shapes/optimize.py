@@ -3,7 +3,7 @@ import os
 
 import numpy as np
 import torch
-from torch.utils.tensorboard.writer import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 
 from data import SampleDataset
 from network import ImplicitNet
@@ -38,10 +38,11 @@ class LatentOptimizer(object):
         self.output = output
         self.ckpt_freq = ckpt_freq
         self.clamp_dist = clamp_dist
+        self.clamp = clamp_dist > 0
         self.centroids = torch.from_numpy(
             centroids).float() if centroids is not None else None
         self.rotations = torch.from_numpy(
-            rotations).float()if rotations is not None else None
+            rotations).float() if rotations is not None else None
 
         self.latent_vecs = torch.zeros((num_latents, latent_size))
         self.latent_vecs = self.latent_vecs.to(device)
@@ -88,18 +89,16 @@ class LatentOptimizer(object):
                 points = torch.cat([latents, points.squeeze()], dim=-1)
 
                 surface_pred = self.network(points).squeeze()
-                surface_pred = torch.clamp(
-                    surface_pred, -self.clamp_dist, self.clamp_dist)
                 sdf_values = torch.tanh(sdf_values)
-                sdf_values = torch.clamp(
-                    sdf_values, -self.clamp_dist, self.clamp_dist)
+
+                if self.clamp:
+                    surface_pred = torch.clamp(
+                        surface_pred, -self.clamp_dist, self.clamp_dist)
+                    sdf_values = torch.clamp(
+                        sdf_values, -self.clamp_dist, self.clamp_dist)
 
                 sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
-                # sdf_loss = (((sdf_values-surface_pred)).abs()).mean()
-                # point_grad = self.gradient(points, surface_pred)
-                # grad_loss = ((point_grad.norm(2, dim=-1) - 1) ** 2).mean()
                 latent_loss = latents.abs().mean()
-                # loss = sdf_loss + 0.1 * grad_loss + latent_loss * 1e-4
                 loss = sdf_loss + latent_loss * 1e-3
 
                 self.optimizer.zero_grad()
@@ -149,7 +148,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_iter', type=int, default=100)
     parser.add_argument('--latent_size', type=int, default=125)
     parser.add_argument('--init_lr', type=float, default=1e-3)
-    parser.add_argument('--clamp_dist', type=float, default=0.1)
+    parser.add_argument('--clamp_dist', type=float, default=-1)
     parser.add_argument("--ckpt_freq", type=int, default=-1)
     parser.add_argument('--cpu', action='store_true')
     parser.add_argument('--orient', action='store_true')

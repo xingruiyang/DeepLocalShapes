@@ -56,7 +56,7 @@ class MeshSampler():
         orientation = orientation.detach().numpy()
         return centre, orientation[0, ...]
 
-    def sample_sdf(self):
+    def sample_sdf(self, show=False):
         mesh_centre = np.mean(self.mesh.vertices, axis=0)
         bounding_radius = np.max(np.linalg.norm(
             self.mesh.vertices-mesh_centre, axis=1)) * 1.2
@@ -65,7 +65,8 @@ class MeshSampler():
             args.num_samples, sign_method='normal',
             radius=bounding_radius, centre=mesh_centre)
 
-        self.display_sdf(points, sdf)
+        if show:
+            self.display_sdf(points, sdf)
         voxels = surface_points // self.voxel_size
         voxels = np.unique(voxels, axis=0)
         voxels += 0.5
@@ -99,7 +100,8 @@ class MeshSampler():
             centroids.append(centre)
             rotations.append(orientation)
 
-            # self.display_sdf(voxel_pts, voxel_sdf)
+            if show:
+                self.display_sdf(voxel_pts, voxel_sdf)
 
             vsample = np.zeros((voxel_pts.shape[0], 6))
             vsample[:, 0] = float(vid)
@@ -123,6 +125,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_samples', type=int, default=1000000)
     parser.add_argument('--transformer', type=str, default=None)
     parser.add_argument('--normalize', action='store_true')
+    parser.add_argument('--show', action='store_true')
     args = parser.parse_args()
 
     mesh = trimesh.load(args.input)
@@ -132,7 +135,7 @@ if __name__ == '__main__':
         args.transformer,
         args.normalize)
 
-    samples, voxels, centroids, rotations = sampler.sample_sdf()
+    samples, voxels, centroids, rotations = sampler.sample_sdf(args.show)
     if not os.path.exists(args.output):
         os.makedirs(args.output, exist_ok=True)
 

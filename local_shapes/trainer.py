@@ -41,6 +41,7 @@ class NetworkTrainer(object):
         self.ckpt_freq = ckpt_freq
         self.batch_size = batch_size
         self.clamp_dist = clamp_dist
+        self.clamp = clamp_dist > 0
         self.centroids = torch.from_numpy(
             centroids).float() if centroids is not None else None
         self.orientations = torch.from_numpy(
@@ -104,18 +105,16 @@ class NetworkTrainer(object):
                 points = torch.cat([latents, points.squeeze()], dim=-1)
 
                 surface_pred = self.network(points).squeeze()
-                surface_pred = torch.clamp(
-                    surface_pred, -self.clamp_dist, self.clamp_dist)
                 sdf_values = torch.tanh(sdf_values)
-                sdf_values = torch.clamp(
-                    sdf_values, -self.clamp_dist, self.clamp_dist)
+
+                if self.clamp:
+                    surface_pred = torch.clamp(
+                        surface_pred, -self.clamp_dist, self.clamp_dist)
+                    sdf_values = torch.clamp(
+                        sdf_values, -self.clamp_dist, self.clamp_dist)
 
                 sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
-                # sdf_loss = (((sdf_values-surface_pred)).abs()).mean()
-                # point_grad = self.gradient(points, surface_pred)
-                # grad_loss = ((point_grad.norm(2, dim=-1) - 1) ** 2).mean()
                 latent_loss = latents.abs().mean()
-                # loss = sdf_loss + 0.1 * grad_loss + latent_loss * 1e-4
                 loss = sdf_loss + latent_loss * 1e-3
 
                 self.optimizer.zero_grad()
@@ -155,11 +154,11 @@ if __name__ == '__main__':
     parser.add_argument("data", type=str)
     parser.add_argument("--output", type=str, default="output")
     parser.add_argument("--log_dir", type=str, default=None)
-    parser.add_argument("--batch_size", type=int, default=512)
+    parser.add_argument("--batch_size", type=int, default=10000)
     parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--latent_size", type=int, default=125)
     parser.add_argument("--init_lr", type=float, default=1e-3)
-    parser.add_argument("--clamp_dist", type=float, default=0.1)
+    parser.add_argument("--clamp_dist", type=float, default=-1)
     parser.add_argument("--ckpt_freq", type=int, default=-1)
     parser.add_argument("--cpu", action='store_true')
     parser.add_argument("--orient", action='store_true')

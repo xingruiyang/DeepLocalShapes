@@ -12,7 +12,7 @@ class SceneGenerator():
         self.radius = 1
         self.num_shapes = num_shapes
         self.shape_type = [
-            'cuboid',  'cylinder', 'ellipsoid', 'cone']
+            'cuboid',  'cylinder', 'ellipsoid']
         # self.shape_type = ['cuboid']
 
     def random_pose(self):
@@ -29,33 +29,33 @@ class SceneGenerator():
     def random_cuboid(self):
         cuboid = trimesh.creation.box(
             extents=[
-                random.uniform(self.radius*0.05, self.radius*0.2),
-                random.uniform(self.radius*0.05, self.radius*0.2),
-                random.uniform(self.radius*0.05, self.radius*0.2),
+                random.uniform(self.radius*0.1, self.radius*0.3),
+                random.uniform(self.radius*0.1, self.radius*0.3),
+                random.uniform(self.radius*0.1, self.radius*0.3),
             ])
         return cuboid
 
     def random_cylinder(self):
         return trimesh.creation.cylinder(
-            radius=random.uniform(self.radius*0.05, self.radius*0.08),
-            height=random.uniform(self.radius*0.2, self.radius*0.3))
+            radius=random.uniform(self.radius*0.1, self.radius*0.12),
+            height=random.uniform(self.radius*0.2, self.radius*0.4))
 
     def random_cone(self):
         return trimesh.creation.cone(
-            radius=random.uniform(self.radius*0.07, self.radius*0.1),
-            height=random.uniform(self.radius*0.2, self.radius*0.3))
+            radius=random.uniform(self.radius*0.07, self.radius*0.15),
+            height=random.uniform(self.radius*0.2, self.radius*0.4))
 
     def random_sphere(self):
         return trimesh.primitives.Sphere(
-            radius=random.uniform(self.radius*0.05, self.radius*0.12))
+            radius=random.uniform(self.radius*0.08, self.radius*0.16))
 
     def random_ellipsoid(self):
-        sphere = trimesh.primitives.Sphere(radius=self.radius * 0.03)
+        sphere = trimesh.primitives.Sphere(radius=self.radius * 0.05)
         verts = sphere.vertices
         new_verts = np.zeros_like(verts)
-        new_verts[:, 0] = verts[:, 0] * random.uniform(1, 4)
-        new_verts[:, 1] = verts[:, 1] * random.uniform(1, 4)
-        new_verts[:, 2] = verts[:, 2] * random.uniform(1, 4)
+        new_verts[:, 0] = verts[:, 0] * random.uniform(1, 5)
+        new_verts[:, 1] = verts[:, 1] * random.uniform(1, 5)
+        new_verts[:, 2] = verts[:, 2] * random.uniform(1, 5)
         return trimesh.Trimesh(new_verts, sphere.faces)
 
     def scale_to_unit_cube(self, mesh):
