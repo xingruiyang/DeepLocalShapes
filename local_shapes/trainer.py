@@ -130,7 +130,9 @@ class NetworkTrainer(object):
 
                 if self.log_dir is not None:
                     self.logger.add_scalar(
-                        'loss', loss.item(), global_steps)
+                        'train/sdf_loss', sdf_loss.item(), global_steps)
+                    self.logger.add_scalar(
+                        'train/latent_loss', latent_loss.item(), global_steps)
 
                 log_progress(
                     batch_steps, self.num_batch,

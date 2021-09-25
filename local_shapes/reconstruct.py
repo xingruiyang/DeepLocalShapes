@@ -148,10 +148,10 @@ class ShapeReconstructor(object):
         mesh_faces = np.concatenate(mesh_faces, axis=0)
         recon_shape = m.Trimesh(mesh_verts, mesh_faces)
         # print(recon_shape.vertex_normals*0.5+0.5)
-        colors = -recon_shape.vertex_normals #*0.5+0.5
-        colors[:, :2] *= -1
+        colors = recon_shape.vertex_normals #*0.5+0.5
+        # colors[:, :2] *= -1
         colors = colors * 0.5 + 0.5
-        recon_shape.visual.vertex_colors=colors
+        # recon_shape.visual.vertex_colors=colors
         # print(recon_shape.face_normals)
         # recon_shape = m.Trimesh(
         #     mesh_verts, mesh_faces,
@@ -237,9 +237,10 @@ if __name__ == '__main__':
         recon_shape = reconstructor.reconstruct()
 
     if args.output is not None:
-        if not os.path.exists(args.output):
-            os.makedirs(args.output, exist_ok=True)
-        recon_shape.export(os.path.join(args.output, "recon.ply"))
+        # if not os.path.exists(args.output):
+        #     os.makedirs(args.output, exist_ok=True)
+        recon_shape.export(args.output)
+        # recon_shape.export(os.path.join(args.output, "recon.ply"))
 
     if args.show:
         mesh = pyrender.Mesh.from_trimesh(recon_shape)

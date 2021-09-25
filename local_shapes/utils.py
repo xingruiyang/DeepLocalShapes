@@ -43,10 +43,10 @@ def load_latents(filename, device=torch.device('cpu')):
     return latents
 
 
-def save_latest(folder, decoder, optimizer, latents=None, epoch=0):
+def save_latest(folder, network, optimizer, latents=None, epoch=0):
     print("The latest model is saved to {}".format(folder))
     save_model(
-        folder, "latest_model.pth", decoder, epoch)
+        folder, "latest_model.pth", network, epoch)
     save_optimizer(
         folder, "latest_optim.pth", optimizer, epoch)
     if latents is not None:

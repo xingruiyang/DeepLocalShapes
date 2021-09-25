@@ -21,7 +21,7 @@ class SampleDataset(Dataset):
         self.num_latents = self.voxels.shape[0]
 
         if training:
-            train_data = raw_data['samples']
+            train_data = os.path.join(data_path, raw_data['samples'])
             self.samples = np.load(train_data)
         else:
             self.samples = None

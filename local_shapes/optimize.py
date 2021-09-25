@@ -3,7 +3,7 @@ import os
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.tensorboard.writer import SummaryWriter
 
 from data import SampleDataset
 from network import ImplicitNet
@@ -17,9 +17,14 @@ class LatentOptimizer(object):
                  num_latents,
                  latent_size,
                  voxel_size,
+                 centroids,
+                 rotations,
                  init_lr,
+                 ckpt_freq=-1,
                  batch_size=512,
+                 clamp_dist=0.1,
                  logger=None,
+                 output=None,
                  device=torch.device('cpu')) -> None:
 
         self.init_lr = init_lr
@@ -30,6 +35,13 @@ class LatentOptimizer(object):
         self.eval_data = torch.from_numpy(eval_data).to(device)
         self.network = network
         self.logger = logger
+        self.output = output
+        self.ckpt_freq = ckpt_freq
+        self.clamp_dist = clamp_dist
+        self.centroids = torch.from_numpy(
+            centroids).float() if centroids is not None else None
+        self.rotations = torch.from_numpy(
+            rotations).float()if rotations is not None else None
 
         self.latent_vecs = torch.zeros((num_latents, latent_size))
         self.latent_vecs = self.latent_vecs.to(device)
@@ -49,28 +61,46 @@ class LatentOptimizer(object):
             batch_sdf_loss = 0
             batch_latent_loss = 0
             batch_steps = 0
-            self.network.train()
             eval_data = self.eval_data[torch.randperm(
                 self.eval_data.shape[0]), :]
             for batch_idx in range(self.num_batch):
                 begin = batch_idx * self.batch_size
                 end = min(eval_data.shape[0], (batch_idx+1)*self.batch_size)
 
-                latent_ind = eval_data[begin:end, 0].int()
-                sdf_values = eval_data[begin:end, 4] * input_scale
-                points = eval_data[begin:end, 1:4] * input_scale
-
+                latent_ind = eval_data[begin:end, 0].to(device).int()
+                sdf_values = eval_data[begin:end, 4].to(device) * input_scale
+                points = eval_data[begin:end, 1:4].to(device)
+                weights = eval_data[begin:end, 5].to(device)
                 latents = torch.index_select(self.latent_vecs, 0, latent_ind)
-                points = torch.cat([latents, points], dim=-1)
+
+                if self.centroids is not None:
+                    centre = torch.index_select(
+                        self.centroids.to(device), 0, latent_ind)
+                    points -= centre
+
+                if self.rotations is not None:
+                    orient = torch.index_select(
+                        self.rotations.to(device), 0, latent_ind)
+                    points = torch.matmul(
+                        points[:, None, :], orient.transpose(1, 2))
+
+                points *= input_scale
+                points = torch.cat([latents, points.squeeze()], dim=-1)
 
                 surface_pred = self.network(points).squeeze()
-                surface_pred = torch.clamp(surface_pred, -0.1, 0.1)
+                surface_pred = torch.clamp(
+                    surface_pred, -self.clamp_dist, self.clamp_dist)
                 sdf_values = torch.tanh(sdf_values)
-                sdf_values = torch.clamp(sdf_values, -0.1, 0.1)
+                sdf_values = torch.clamp(
+                    sdf_values, -self.clamp_dist, self.clamp_dist)
 
-                sdf_loss = ((sdf_values - surface_pred).abs()).mean()
+                sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
+                # sdf_loss = (((sdf_values-surface_pred)).abs()).mean()
+                # point_grad = self.gradient(points, surface_pred)
+                # grad_loss = ((point_grad.norm(2, dim=-1) - 1) ** 2).mean()
                 latent_loss = latents.abs().mean()
-                loss = sdf_loss + latent_loss * 1e-4
+                # loss = sdf_loss + 0.1 * grad_loss + latent_loss * 1e-4
+                loss = sdf_loss + latent_loss * 1e-3
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -94,15 +124,19 @@ class LatentOptimizer(object):
                         batch_sdf_loss/batch_steps,
                         batch_latent_loss/batch_steps))
 
+            self.save_latents(os.path.join(self.output, 'latest_latents.npy'))
+            if self.ckpt_freq > 0 and n_iter % self.ckpt_freq == 0:
+                self.save_latents(
+                    os.path.join(self.output, 'ckpt_{}_latents.npy'.format(n_iter)))
+
     def update_lr(self, iter, init_lr):
         lr = init_lr if iter == 0 else init_lr * (0.9**(iter//100))
         for _, param_group in enumerate(self.optimizer.param_groups):
             param_group["lr"] = lr
         print("learning rate is adjusted to {}".format(lr))
 
-    def save_latents(self, output):
+    def save_latents(self, filename):
         latent_vecs = self.latent_vecs.detach().cpu().numpy()
-        filename = os.path.join(output, "latent_vecs.npy")
         np.save(filename, latent_vecs)
 
 
@@ -115,7 +149,10 @@ if __name__ == '__main__':
     parser.add_argument('--num_iter', type=int, default=100)
     parser.add_argument('--latent_size', type=int, default=125)
     parser.add_argument('--init_lr', type=float, default=1e-3)
+    parser.add_argument('--clamp_dist', type=float, default=0.1)
+    parser.add_argument("--ckpt_freq", type=int, default=-1)
     parser.add_argument('--cpu', action='store_true')
+    parser.add_argument('--orient', action='store_true')
     args = parser.parse_args()
 
     device = torch.device('cuda:0' if (
@@ -127,11 +164,26 @@ if __name__ == '__main__':
     network = ImplicitNet(**net_args).to(device)
     load_model(args.ckpt, network, device)
 
-    eval_data = SampleDataset(args.data, True)
+    eval_data = SampleDataset(
+        args.data, args.orient, True)
+    logger = SummaryWriter(os.path.join(args.output, 'logs/'))
     latent_optim = LatentOptimizer(
-        network, eval_data.samples, eval_data.num_latents, args.latent_size,
-        eval_data.voxel_size, args.init_lr, args.batch_size, device=device)
+        network,
+        eval_data.samples,
+        eval_data.num_latents,
+        args.latent_size,
+        eval_data.voxel_size,
+        eval_data.centroids,
+        eval_data.rotations,
+        args.init_lr,
+        args.ckpt_freq,
+        args.batch_size,
+        args.clamp_dist,
+        logger=logger,
+        output=args.output,
+        device=device)
 
     latent_optim.init_latents()
     latent_optim(args.num_iter)
-    latent_optim.save_latents(args.output)
+    filename = os.path.join(args.output, "latent_vecs.npy")
+    latent_optim.save_latents(filename)

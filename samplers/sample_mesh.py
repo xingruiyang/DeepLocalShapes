@@ -44,8 +44,9 @@ class MeshSampler():
         return mesh_to_sdf.scale_to_unit_cube(mesh)
 
     def get_centroid_and_orientation(self, pts):
-        voxel_surface = pts[np.random.permutation(
-            pts.shape[0]), :][:self.min_surface_pts, :]
+        random_ind = np.random.permutation(
+            pts.shape[0])[:self.min_surface_pts]
+        voxel_surface = pts[random_ind, :]
         centre = np.mean(voxel_surface, axis=0)
         volume_surface = (voxel_surface-centre) / (1.5*self.voxel_size)
         volume_surface = torch.from_numpy(volume_surface)
@@ -89,7 +90,7 @@ class MeshSampler():
             centre = np.zeros((3, 1))
             orientation = np.eye(3)
             if self.transformer is not None:
-                if voxel_surface.shape[0] > self.min_surface_pts:
+                if voxel_surface.shape[0] >= self.min_surface_pts:
                     centre, orientation = self.get_centroid_and_orientation(
                         voxel_surface)
                     num_oriented_voxels += 1
@@ -136,10 +137,13 @@ if __name__ == '__main__':
         os.makedirs(args.output, exist_ok=True)
 
     out = dict()
-    out['samples'] = samples.astype(np.float32)
+    sample_name = 'samples.npy'
+    out['samples'] = sample_name
     out['voxels'] = voxels.astype(np.float32)
     out['centroids'] = np.stack(centroids, axis=0).astype(np.float32)
     out['rotations'] = np.stack(rotations, axis=0).astype(np.float32)
     out['voxel_size'] = args.voxel_size
-    with open(os.path.join(args.output, "sample.pkl"), "wb") as f:
-        pickle.dump(out, f)
+    with open(os.path.join(args.output, "samples.pkl"), "wb") as f:
+        pickle.dump(out, f,  pickle.HIGHEST_PROTOCOL)
+    np.save(os.path.join(args.output, sample_name),
+            samples.astype(np.float32))
