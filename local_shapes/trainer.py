@@ -96,11 +96,11 @@ class NetworkTrainer(object):
                     centre = torch.index_select(self.centroids, 0, latent_ind)
                     points -= centre
 
-                if self.orientations is not None:
-                    orient = torch.index_select(
-                        self.orientations, 0, latent_ind)
-                    points = torch.matmul(
-                        points[:, None, :], orient.transpose(1, 2))
+                # if self.orientations is not None:
+                #     orient = torch.index_select(
+                #         self.orientations, 0, latent_ind)
+                #     points = torch.matmul(
+                #         points[:, None, :], orient.transpose(1, 2))
 
                 points *= input_scale
                 points = torch.cat([latents, points.squeeze()], dim=-1)

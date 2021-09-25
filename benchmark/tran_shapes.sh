@@ -12,23 +12,24 @@ fi
 
 set -e
 
-echo "INFO: Evaluating:" $input;
-echo "INFO: Output: " $output;
-
 if [ ! -z $3 ]; then
     normalized_output=$input;
     if [[ ! $normalized_output == *.ply ]]; then
         filename=$(echo $input|sed -e 's/\.[^./]*$//');
-        normalized_output="${filename}_norm.ply";
+        normalized_input=$input
+        input="${filename}_norm.ply";
         if [ ! -f $normalized_output ]; then
             echo "INFO: normalizing input";
-            python3 samplers/normalize_mesh.py $input \
-                --output $normalized_output;
-            input=$normalized_output;
+            python3 samplers/normalize_mesh.py \
+                $normalized_input \
+                --output $input;
             echo "The input has been normalized to $input";
         fi
     fi
 fi
+
+echo "INFO: Evaluating:" $input;
+echo "INFO: Output:" $output;
 
 if [ ! -f $output/data/samples.pkl ]; then
     echo "INFO: Sampling mesh";
