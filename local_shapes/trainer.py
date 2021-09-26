@@ -105,7 +105,7 @@ class NetworkTrainer(object):
 
                 points = torch.cat([latents, points], dim=-1)
                 surface_pred = self.network(points).squeeze()
-                sdf_values = torch.tanh(sdf_values)
+                # sdf_values = torch.tanh(sdf_values)
 
                 if self.clamp:
                     surface_pred = torch.clamp(
@@ -115,7 +115,7 @@ class NetworkTrainer(object):
 
                 sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
                 latent_loss = latents.abs().mean()
-                loss = sdf_loss + latent_loss * 1e-4
+                loss = sdf_loss + latent_loss * 1e-2
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -171,7 +171,7 @@ class NetworkTrainer(object):
                     global_step=epoch)
                 if self.gt_points is not None:
                     recon_points = shape.sample(self.num_samples)
-                    dist = chamfer_distance(self.gt_points, recon_points, direction='x_to_y')
+                    dist = chamfer_distance(self.gt_points, recon_points, direction='bi')
                     self.logger.add_scalar("train/chamfer_dist", dist, epoch)
         save_ckpts(self.output, self.network,
                    self.optimizer,

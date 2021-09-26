@@ -2,8 +2,8 @@
 
 input=$1;
 output=$2;
-LATENT_SIZE=64;
-CLAMP_DIST=-1;
+LATENT_SIZE=$3;
+CLAMP_DIST=$4;
 VOXLE_SIZE=0.1;
 
 if [ -z $1 ] || [ -z $2 ]; then
@@ -12,13 +12,13 @@ fi
 
 set -e
 
-if [ ! -z $3 ]; then
+if [ ! -z $5 ]; then
     normalized_output=$input;
     if [[ ! $normalized_output == *.ply ]]; then
         filename=$(echo $input|sed -e 's/\.[^./]*$//');
         normalized_input=$input
         input="${filename}_norm.ply";
-        if [ ! -f $normalized_output ]; then
+        if [ ! -f $input ]; then
             echo "INFO: normalizing input";
             python3 samplers/normalize_mesh.py \
                 $normalized_input \
@@ -40,7 +40,7 @@ if [ ! -f $output/data/samples.pkl ]; then
         --transformer models/transformer.pth;
 fi
 
-if [ ! -f $output/aligned/ckpt_epoch_99_model.pth ]; then
+if [ ! -f $output/aligned/ckpt_49_model.pth ]; then
     echo "INFO: Training aligned network";
     python3 local_shapes/trainer.py \
         $output/data \
@@ -50,10 +50,11 @@ if [ ! -f $output/aligned/ckpt_epoch_99_model.pth ]; then
         --ckpt_freq 1 \
         --orient \
         --gt_mesh $input \
+        --num_epochs 50 \
         --latent_size $LATENT_SIZE;
 fi
 
-if [ ! -f $output/unaligned/ckpt_epoch_99_model.pth ]; then
+if [ ! -f $output/unaligned/ckpt_49_model.pth ]; then
     echo "INFO: Training unaligned network";
     python3 local_shapes/trainer.py \
         $output/data \
@@ -62,5 +63,6 @@ if [ ! -f $output/unaligned/ckpt_epoch_99_model.pth ]; then
         --clamp_dist $CLAMP_DIST \
         --ckpt_freq 1 \
         --gt_mesh $input \
+        --num_epochs 50 \
         --latent_size $LATENT_SIZE;
 fi

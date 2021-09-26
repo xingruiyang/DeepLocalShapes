@@ -5,6 +5,7 @@ output=$2
 LATENT_SIZE=64
 CLAMP_DIST=-1
 VOXLE_SIZE=0.1
+NUM_EPOCHS=50
 
 if [ -z $1 ] || [ -z $2 ]; then
     exit 0
@@ -48,6 +49,7 @@ if [ ! -f $output/aligned/ckpt_99_latents.npy ]; then
         --clamp_dist $CLAMP_DIST \
         --ckpt_freq 1 \
         --orient \
+        --num_epochs $NUM_EPOCHS \
         --gt_mesh $input \
         --latent_size $LATENT_SIZE;
 fi
@@ -61,6 +63,7 @@ if [ ! -f $output/unaligned/ckpt_99_latents.npy ]; then
         --batch_size 10000 \
         --clamp_dist $CLAMP_DIST \
         --ckpt_freq 1 \
+        --num_epochs $NUM_EPOCHS \
         --gt_mesh $input \
         --latent_size $LATENT_SIZE;
 fi

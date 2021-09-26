@@ -30,8 +30,8 @@ class LatentOptimizer(object):
                  logger=None,
                  output=None,
                  device=torch.device('cpu')) -> None:
-        self.global_steps=0
-        self.num_samples=2**14
+        self.global_steps = 0
+        self.num_samples = 2**14
         self.init_lr = init_lr
         self.voxel_size = voxel_size
         self.device = device
@@ -176,8 +176,11 @@ class LatentOptimizer(object):
                     global_step=epoch)
                 if self.gt_points is not None:
                     recon_points = shape.sample(self.num_samples)
-                    dist = chamfer_distance(self.gt_points, recon_points, direction='x_to_y')
+                    dist = chamfer_distance(
+                        self.gt_points, recon_points, direction='bi')
                     self.logger.add_scalar("eval/chamfer_dist", dist, epoch)
+                shape.export(os.path.join(
+                    self.output, "ckpt_{}_mesh.ply".format(epoch)))
 
 
 if __name__ == '__main__':
@@ -187,7 +190,7 @@ if __name__ == '__main__':
     parser.add_argument('output', type=str)
     parser.add_argument("--gt_mesh", type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=10000)
-    parser.add_argument('--num_iter', type=int, default=100)
+    parser.add_argument('--num_epochs', type=int, default=100)
     parser.add_argument('--latent_size', type=int, default=125)
     parser.add_argument('--init_lr', type=float, default=1e-3)
     parser.add_argument('--clamp_dist', type=float, default=-1)
@@ -228,6 +231,6 @@ if __name__ == '__main__':
         device=device)
 
     latent_optim.init_latents()
-    latent_optim(args.num_iter)
+    latent_optim(args.num_epochs)
     filename = os.path.join(args.output, "latent_vecs.npy")
     latent_optim.save_latents(filename)
