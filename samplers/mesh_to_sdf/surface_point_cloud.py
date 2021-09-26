@@ -104,7 +104,7 @@ class SurfacePointCloud:
 
     def sample_sdf_near_surface(self, number_of_points=500000, use_scans=True, sign_method='normal', normal_sample_count=11, min_size=0, radius=1, centre=None, return_gradients=False):
         query_points = []
-        surface_sample_count = int(number_of_points * 47 / 50) // 2
+        surface_sample_count = int(number_of_points * 40 / 50) // 2
         surface_points = self.get_random_surface_points(surface_sample_count, use_scans=use_scans)
         query_points.append(surface_points + np.random.normal(scale=0.0025, size=(surface_sample_count, 3)))
         query_points.append(surface_points + np.random.normal(scale=0.00025, size=(surface_sample_count, 3)))

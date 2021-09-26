@@ -59,7 +59,7 @@ class ShapeReconstructor(object):
                  voxel_size,
                  resolution=8,
                  centroids=None,
-                 orientations=None,
+                 rotations=None,
                  device=torch.device('cpu')):
         super(ShapeReconstructor, self).__init__()
         self.latent_vecs = latent_vecs
@@ -74,11 +74,11 @@ class ShapeReconstructor(object):
         else:
             self.centroids = centroids
 
-        if isinstance(orientations, np.ndarray):
-            self.orientations = torch.from_numpy(
-                orientations).to(device).float()
+        if isinstance(rotations, np.ndarray):
+            self.rotations = torch.from_numpy(
+                rotations).to(device).float()
         else:
-            self.orientations = orientations
+            self.rotations = rotations
 
     def interp_border(self, z_array, voxels):
         min_voxel = np.round(np.amin(voxels, axis=0)).astype(int)
@@ -120,9 +120,9 @@ class ShapeReconstructor(object):
                 self.resolution, range=[-.5, .5], device=self.device)
             if self.centroids is not None:
                 grid_pts -= self.centroids[latent_ind, :] / self.voxel_size
-            if self.orientations is not None:
+            if self.rotations is not None:
                 grid_pts = torch.matmul(
-                    grid_pts, self.orientations[latent_ind, ...].transpose(0, 1))
+                    grid_pts, self.rotations[latent_ind, ...].transpose(0, 1))
 
             latent_vec = self.latent_vecs[latent_ind, :]
             z = get_sdf(self.network, latent_vec, grid_pts)
@@ -172,9 +172,9 @@ class ShapeReconstructor(object):
                 self.resolution, range=[-.5, .5], device=self.device)
             if self.centroids is not None:
                 grid_pts -= self.centroids[latent_ind, :] / self.voxel_size
-            if self.orientations is not None:
+            if self.rotations is not None:
                 grid_pts = torch.matmul(
-                    grid_pts, self.orientations[latent_ind, ...].transpose(0, 1))
+                    grid_pts, self.rotations[latent_ind, ...].transpose(0, 1))
 
             latent_vec = self.latent_vecs[latent_ind, :]
             z = get_sdf(self.network, latent_vec, grid_pts)

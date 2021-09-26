@@ -3,16 +3,19 @@ import os
 
 import numpy as np
 import torch
+import trimesh
 from torch.utils.tensorboard import SummaryWriter
 
 from data import SampleDataset
 from network import ImplicitNet
-from utils import load_model, log_progress
+from reconstruct import ShapeReconstructor
+from utils import chamfer_distance, load_model, log_progress
 
 
 class LatentOptimizer(object):
     def __init__(self,
                  network,
+                 voxels,
                  eval_data,
                  num_latents,
                  latent_size,
@@ -23,10 +26,12 @@ class LatentOptimizer(object):
                  ckpt_freq=-1,
                  batch_size=512,
                  clamp_dist=0.1,
+                 gt_mesh=None,
                  logger=None,
                  output=None,
                  device=torch.device('cpu')) -> None:
-
+        self.global_steps=0
+        self.num_samples=2**14
         self.init_lr = init_lr
         self.voxel_size = voxel_size
         self.device = device
@@ -39,10 +44,18 @@ class LatentOptimizer(object):
         self.ckpt_freq = ckpt_freq
         self.clamp_dist = clamp_dist
         self.clamp = clamp_dist > 0
-        self.centroids = torch.from_numpy(
-            centroids).float() if centroids is not None else None
-        self.rotations = torch.from_numpy(
-            rotations).float() if rotations is not None else None
+        self.gt_points = gt_mesh.sample(
+            self.num_samples) if gt_mesh is not None else None
+        self.centroids = None
+        self.rotations = None
+        self.voxels = voxels
+
+        if centroids is not None:
+            self.centroids = torch.from_numpy(centroids).float()
+            self.centroids = self.centroids.to(device)
+        if rotations is not None:
+            self.rotations = torch.from_numpy(rotations).float()
+            self.rotations = self.rotations.to(device)
 
         self.latent_vecs = torch.zeros((num_latents, latent_size))
         self.latent_vecs = self.latent_vecs.to(device)
@@ -55,7 +68,7 @@ class LatentOptimizer(object):
 
     def __call__(self, num_epochs):
         self.network.train()
-        global_steps = 0
+        self.global_steps = 0
         input_scale = 1.0 / self.voxel_size
         for n_iter in range(num_epochs):
             batch_loss = 0
@@ -70,24 +83,22 @@ class LatentOptimizer(object):
 
                 latent_ind = eval_data[begin:end, 0].to(device).int()
                 sdf_values = eval_data[begin:end, 4].to(device) * input_scale
-                points = eval_data[begin:end, 1:4].to(device)
+                points = eval_data[begin:end, 1:4].to(device) * input_scale
                 weights = eval_data[begin:end, 5].to(device)
                 latents = torch.index_select(self.latent_vecs, 0, latent_ind)
 
                 if self.centroids is not None:
-                    centre = torch.index_select(
-                        self.centroids.to(device), 0, latent_ind)
-                    points -= centre
+                    centre = torch.index_select(self.centroids, 0, latent_ind)
+                    points -= centre * input_scale
 
                 if self.rotations is not None:
-                    orient = torch.index_select(
-                        self.rotations.to(device), 0, latent_ind)
-                    points = torch.matmul(
-                        points[:, None, :], orient.transpose(1, 2))
+                    rot = torch.index_select(
+                        self.rotations, 0, latent_ind)
+                    points = torch.bmm(
+                        points.unsqueeze(1),
+                        rot.transpose(1, 2)).squeeze()
 
-                points *= input_scale
-                points = torch.cat([latents, points.squeeze()], dim=-1)
-
+                points = torch.cat([latents, points], dim=-1)
                 surface_pred = self.network(points).squeeze()
                 sdf_values = torch.tanh(sdf_values)
 
@@ -99,7 +110,7 @@ class LatentOptimizer(object):
 
                 sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
                 latent_loss = latents.abs().mean()
-                loss = sdf_loss + latent_loss * 1e-3
+                loss = sdf_loss + latent_loss * 1e-4
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -109,11 +120,13 @@ class LatentOptimizer(object):
                 batch_sdf_loss += sdf_loss.item()
                 batch_latent_loss += latent_loss.item()
                 batch_steps += 1
-                global_steps += 1
+                self.global_steps += 1
 
                 if self.logger is not None:
                     self.logger.add_scalar(
-                        'val/loss', loss.item(), global_steps)
+                        'eval/sdf_loss', sdf_loss.item(), self.global_steps)
+                    self.logger.add_scalar(
+                        'eval/latent_loss', latent_loss.item(), self.global_steps)
 
                 log_progress(
                     batch_steps, self.num_batch,
@@ -125,8 +138,7 @@ class LatentOptimizer(object):
 
             self.save_latents(os.path.join(self.output, 'latest_latents.npy'))
             if self.ckpt_freq > 0 and n_iter % self.ckpt_freq == 0:
-                self.save_latents(
-                    os.path.join(self.output, 'ckpt_{}_latents.npy'.format(n_iter)))
+                self.save_ckpt(n_iter)
 
     def update_lr(self, iter, init_lr):
         lr = init_lr if iter == 0 else init_lr * (0.9**(iter//100))
@@ -138,12 +150,42 @@ class LatentOptimizer(object):
         latent_vecs = self.latent_vecs.detach().cpu().numpy()
         np.save(filename, latent_vecs)
 
+    def save_ckpt(self, epoch):
+        print("saving ckpt for epoch {}".format(epoch))
+        self.save_latents(os.path.join(
+            self.output, 'ckpt_{}_latents.npy'.format(epoch)))
+        shape = None
+        if self.logger is not None:
+            with torch.no_grad():
+                self.network.eval()
+                reconstructor = ShapeReconstructor(
+                    self.network,
+                    self.latent_vecs,
+                    self.voxels,
+                    self.voxel_size,
+                    centroids=self.centroids,
+                    rotations=self.rotations,
+                    device=self.device)
+                shape, verts, faces = reconstructor.reconstruct_interp(True)
+                vertex_tensor = torch.from_numpy(verts).float()
+                face_tensor = torch.from_numpy(faces).int()
+                self.logger.add_mesh(
+                    "eval",
+                    vertices=vertex_tensor.unsqueeze(0),
+                    # faces=face_tensor.unsqueeze(0),
+                    global_step=epoch)
+                if self.gt_points is not None:
+                    recon_points = shape.sample(self.num_samples)
+                    dist = chamfer_distance(self.gt_points, recon_points, direction='x_to_y')
+                    self.logger.add_scalar("eval/chamfer_dist", dist, epoch)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('ckpt', type=str)
     parser.add_argument('data', type=str)
     parser.add_argument('output', type=str)
+    parser.add_argument("--gt_mesh", type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=10000)
     parser.add_argument('--num_iter', type=int, default=100)
     parser.add_argument('--latent_size', type=int, default=125)
@@ -158,6 +200,7 @@ if __name__ == '__main__':
         not args.cpu and torch.cuda.is_available()) else 'cpu')
     if not os.path.exists(args.output):
         os.makedirs(args.output, exist_ok=True)
+    gt_mesh = trimesh.load(args.gt_mesh) if args.gt_mesh is not None else None
 
     net_args = {"d_in": args.latent_size + 3, "dims": [128, 128, 128]}
     network = ImplicitNet(**net_args).to(device)
@@ -168,6 +211,7 @@ if __name__ == '__main__':
     logger = SummaryWriter(os.path.join(args.output, 'logs/'))
     latent_optim = LatentOptimizer(
         network,
+        eval_data.voxels,
         eval_data.samples,
         eval_data.num_latents,
         args.latent_size,
@@ -178,6 +222,7 @@ if __name__ == '__main__':
         args.ckpt_freq,
         args.batch_size,
         args.clamp_dist,
+        gt_mesh=gt_mesh,
         logger=logger,
         output=args.output,
         device=device)

@@ -33,7 +33,9 @@ echo "INFO: Output:" $output;
 
 if [ ! -f $output/data/samples.pkl ]; then
     echo "INFO: Sampling mesh";
-    python3 samplers/sample_mesh.py $input $output/data \
+    python3 samplers/sample_mesh.py \
+        $input \
+        $output/data \
         --voxel_size $VOXLE_SIZE \
         --transformer models/transformer.pth;
 fi

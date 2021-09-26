@@ -54,13 +54,15 @@ def save_latest(folder, network, optimizer, latents=None, epoch=0):
         save_latents(folder, "latest_latents.npy", latents)
 
 
-def save_ckpts(folder, decoder, optimizer, latents=None, epoch=0):
+def save_ckpts(folder, decoder, optimizer, latents=None, shape=None, epoch=0):
     print("Check point file is saved to {}".format(folder))
-    base_name = "ckpt_epoch_" + str(epoch) + "_"
+    base_name = "ckpt_" + str(epoch) + "_"
     save_model(folder, base_name + "model.pth", decoder, epoch)
     save_optimizer(folder, base_name + "optim.pth", optimizer, epoch)
     if latents is not None:
         save_latents(folder, base_name + "latents.npy", latents)
+    if shape is not None:
+        shape.export(os.path.join(folder, base_name+"mesh.ply"))
 
 
 def load_model(file_name, decoder, device=torch.device('cpu')):

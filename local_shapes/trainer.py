@@ -31,7 +31,7 @@ class NetworkTrainer(object):
                  batch_size=1000,
                  clamp_dist=0.1,
                  centroids=None,
-                 orientations=None,
+                 rotations=None,
                  gt_mesh=None,
                  device=torch.device('cpu')):
         super(NetworkTrainer, self).__init__()
@@ -51,14 +51,14 @@ class NetworkTrainer(object):
         self.gt_points = gt_mesh.sample(
             self.num_samples) if gt_mesh is not None else None
         self.centroids = None
-        self.orientations = None
+        self.rotations = None
 
         if centroids is not None:
             self.centroids = torch.from_numpy(centroids).float()
             self.centroids = self.centroids.to(device)
-        if orientations is not None:
-            self.orientations = torch.from_numpy(orientations).float()
-            self.orientations = self.orientations.to(device)
+        if rotations is not None:
+            self.rotations = torch.from_numpy(rotations).float()
+            self.rotations = self.rotations.to(device)
 
         self.num_batch = (train_data.shape[0]-1)//batch_size+1
         self.train_data = torch.from_numpy(train_data).float()
@@ -88,23 +88,22 @@ class NetworkTrainer(object):
 
                 latent_ind = train_data[begin:end, 0].to(device).int()
                 sdf_values = train_data[begin:end, 4].to(device) * input_scale
-                points = train_data[begin:end, 1:4].to(device)
+                points = train_data[begin:end, 1:4].to(device) * input_scale
                 weights = train_data[begin:end, 5].to(device)
                 latents = torch.index_select(self.latent_vecs, 0, latent_ind)
 
                 if self.centroids is not None:
                     centre = torch.index_select(self.centroids, 0, latent_ind)
-                    points -= centre
+                    points -= centre * input_scale
 
-                # if self.orientations is not None:
-                #     orient = torch.index_select(
-                #         self.orientations, 0, latent_ind)
-                #     points = torch.matmul(
-                #         points[:, None, :], orient.transpose(1, 2))
+                if self.rotations is not None:
+                    rot = torch.index_select(
+                        self.rotations, 0, latent_ind)
+                    points = torch.bmm(
+                        points.unsqueeze(1),
+                        rot.transpose(1, 2)).squeeze()
 
-                points *= input_scale
-                points = torch.cat([latents, points.squeeze()], dim=-1)
-
+                points = torch.cat([latents, points], dim=-1)
                 surface_pred = self.network(points).squeeze()
                 sdf_values = torch.tanh(sdf_values)
 
@@ -116,7 +115,7 @@ class NetworkTrainer(object):
 
                 sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
                 latent_loss = latents.abs().mean()
-                loss = sdf_loss + latent_loss * 1e-3
+                loss = sdf_loss + latent_loss * 1e-4
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -150,9 +149,7 @@ class NetworkTrainer(object):
 
     def save_ckpt(self, epoch=0):
         print("saving ckpt for epoch {}".format(epoch))
-        save_ckpts(self.output, self.network,
-                   self.optimizer,
-                   self.latent_vecs, epoch)
+        shape = None
         if self.logger is not None:
             with torch.no_grad():
                 self.network.eval()
@@ -162,7 +159,7 @@ class NetworkTrainer(object):
                     self.voxels,
                     self.voxel_size,
                     centroids=self.centroids,
-                    orientations=self.orientations,
+                    rotations=self.rotations,
                     device=self.device)
                 shape, verts, faces = reconstructor.reconstruct_interp(True)
                 vertex_tensor = torch.from_numpy(verts).float()
@@ -170,12 +167,16 @@ class NetworkTrainer(object):
                 self.logger.add_mesh(
                     "train",
                     vertices=vertex_tensor.unsqueeze(0),
-                    faces=face_tensor.unsqueeze(0),
+                    # faces=face_tensor.unsqueeze(0),
                     global_step=epoch)
                 if self.gt_points is not None:
                     recon_points = shape.sample(self.num_samples)
-                    dist = chamfer_distance(self.gt_points, recon_points)
+                    dist = chamfer_distance(self.gt_points, recon_points, direction='x_to_y')
                     self.logger.add_scalar("train/chamfer_dist", dist, epoch)
+        save_ckpts(self.output, self.network,
+                   self.optimizer,
+                   self.latent_vecs,
+                   shape, epoch)
 
 
 if __name__ == '__main__':
@@ -225,7 +226,7 @@ if __name__ == '__main__':
         batch_size=args.batch_size,
         clamp_dist=args.clamp_dist,
         centroids=dataset.centroids,
-        orientations=dataset.rotations,
+        rotations=dataset.rotations,
         gt_mesh=gt_mesh,
         device=device)
     trainer.train(args.num_epochs)

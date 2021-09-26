@@ -122,7 +122,7 @@ if __name__ == '__main__':
     parser.add_argument('output', type=str)
     parser.add_argument('--voxel_size', type=float, default=0.1)
     parser.add_argument('--min_surface_pts', type=int, default=2048)
-    parser.add_argument('--num_samples', type=int, default=1000000)
+    parser.add_argument('--num_samples', type=int, default=1500000)
     parser.add_argument('--transformer', type=str, default=None)
     parser.add_argument('--normalize', action='store_true')
     parser.add_argument('--show', action='store_true')
