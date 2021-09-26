@@ -81,14 +81,14 @@ class DepthSampler():
             return pcd
 
     def get_centroid_and_orientation(self, pts):
-        voxel_surface = pts[torch.randperm(
-            pts.shape[0]), :][:self.min_surface_pts, :]
-        centroid = torch.mean(voxel_surface, dim=0)
-        volume_surface = (voxel_surface-centroid) / (1.5*self.voxel_size)
-        volume_surface = volume_surface[None, ...]
+        random_ind = torch.randperm(pts.shape[0])[:self.min_surface_pts]
+        voxel_surface = pts[random_ind, :]
+        centre = torch.mean(voxel_surface, dim=0)
+        volume_surface = (voxel_surface-centre) / (1.5*self.voxel_size)
+        volume_surface = volume_surface[None, ...].float()
         orientation = self.transformer(
             volume_surface, transpose_input=True)
-        return centroid, orientation[0, ...]
+        return centre, orientation[0, ...]
 
     def normalized(self, a, axis=-1, order=2):
         l2 = np.linalg.norm(a, order, axis)
@@ -188,7 +188,7 @@ class DepthSampler():
         point_weights = []
         rand_weights = []
         for ind, (key, val) in enumerate(assoc.items()):
-            if ind % args.skip_frames != 0:# or ind > 100:
+            if ind % args.skip_frames != 0  or ind >= 5:
                 continue
 
             pose = trajectory[key]
@@ -201,7 +201,7 @@ class DepthSampler():
             depth = depth.reshape(-1, 1)
             pcd = pcd.reshape(-1, 3)
             rays = rays.reshape(-1, 3)
-            nonzeros = depth[:,0] != 0
+            nonzeros = depth[:, 0] != 0
             depth = depth[nonzeros, :]
             rays = rays[nonzeros, :]
             pcd = pcd[nonzeros, :]
@@ -210,7 +210,7 @@ class DepthSampler():
                 normal, pose[:3, :3].transpose())
             pcd = np.matmul(
                 pcd, pose[:3, :3].transpose()) + pose[:3, 3]
-            rand_pts = 0.99-(np.random.rand(rays.shape[0], 1)*0.4)
+            rand_pts = 0.985-(np.random.rand(rays.shape[0], 1)*0.4)
             rand_pts = rays * rand_pts * depth
             rand_pts = np.matmul(
                 rand_pts, pose[:3, :3].transpose()) + pose[:3, 3]
@@ -243,7 +243,7 @@ class DepthSampler():
         dist1 = 0.01
         dist2 = 0.005
         points = np.concatenate([
-            # surface_points,
+            surface_points,
             surface_points + surface_normals * dist1,
             surface_points - surface_normals * dist1,
             surface_points + surface_normals * dist2,
@@ -251,7 +251,7 @@ class DepthSampler():
             free_space_samples
         ], axis=0)
         sdf = np.concatenate([
-            # np.zeros(surface_points.shape[0]),
+            np.zeros(surface_points.shape[0]),
             np.zeros(surface_points.shape[0]) + dist1,
             np.zeros(surface_points.shape[0]) - dist1,
             np.zeros(surface_points.shape[0]) + dist2,
@@ -259,7 +259,7 @@ class DepthSampler():
             free_space_sdf
         ], axis=0)
         weights = np.concatenate([
-            # point_weights,
+            point_weights,
             point_weights,
             point_weights,
             point_weights,
@@ -268,7 +268,7 @@ class DepthSampler():
         ], axis=0).squeeze()
         print(weights.shape)
         print("We get {} points".format(points.shape[0]))
-        # self.display_sdf(points, sdf)
+        self.display_sdf(points, sdf)
 
         voxels = surface_points // self.voxel_size
         voxels = np.unique(voxels, axis=0)
@@ -355,13 +355,13 @@ if __name__ == '__main__':
         os.makedirs(args.output, exist_ok=True)
 
     out = dict()
-    # samples.astype(np.float32)
-    out['samples'] = os.path.join(args.output, 'samples.npy')
+    sample_name = 'samples.npy'
+    out['samples'] = sample_name
     out['voxels'] = voxels.detach().cpu().numpy().astype(np.float32)
     out['centroids'] = np.stack(centroids, axis=0).astype(np.float32)
     out['rotations'] = np.stack(rotations, axis=0).astype(np.float32)
     out['voxel_size'] = args.voxel_size
     with open(os.path.join(args.output, "samples.pkl"), "wb") as f:
         pickle.dump(out, f,  pickle.HIGHEST_PROTOCOL)
-    np.save(os.path.join(args.output, 'samples.npy'),
+    np.save(os.path.join(args.output, sample_name),
             samples.astype(np.float32))
