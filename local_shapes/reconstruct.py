@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import trimesh as m
 from skimage.measure import marching_cubes
-
+from sklearn.neighbors import NearestNeighbors
 from data import SampleDataset
 # from samplers.mesh_to_sdf.mesh_to_sdf import pyrender_wrapper, scan
 from network import ImplicitNet
@@ -40,15 +40,18 @@ def get_sdf(network, latent_vec, grid_points, batch_size=32**3):
     return z
 
 
-def trace_surface_points(z, xyz):
+def trace_surface_points(z, xyz, mask):
     if not isinstance(z, np.ndarray):
         z = z.detach().cpu().numpy()
     spacing = (xyz[0][2] - xyz[0][1],
                xyz[0][2] - xyz[0][1],
                xyz[0][2] - xyz[0][1])
-    verts, faces, normals, value = marching_cubes(
-        volume=z, level=0, spacing=spacing)
-    return verts, faces, normals, value
+    try:
+        verts, faces, normals, value = marching_cubes(
+            volume=z, level=0, spacing=spacing, mask=mask)
+        return verts, faces, normals, value
+    except:
+        return None
 
 
 class ShapeReconstructor(object):
@@ -60,6 +63,8 @@ class ShapeReconstructor(object):
                  resolution=8,
                  centroids=None,
                  rotations=None,
+                 surface_points=None,
+                 max_surface_dist=0.1,
                  device=torch.device('cpu')):
         super(ShapeReconstructor, self).__init__()
         self.latent_vecs = latent_vecs
@@ -68,6 +73,9 @@ class ShapeReconstructor(object):
         self.voxel_size = voxel_size
         self.device = device
         self.resolution = resolution+1
+        self.max_surface_dist = max_surface_dist
+        self.surface_pts = NearestNeighbors(
+            n_neighbors=1, metric='l2').fit(surface_points)
         if isinstance(centroids, np.ndarray):
             self.centroids = torch.from_numpy(
                 centroids).to(device).float()
@@ -88,6 +96,8 @@ class ShapeReconstructor(object):
         grid_sdf[:] = 10000
 
         for i in range(voxels.shape[0]):
+            # if i > 100:
+            #     break
             z = z_array[i].reshape(
                 self.resolution, self.resolution, self.resolution)
             voxel = np.round(voxels[i, :]).astype(int) - min_voxel
@@ -102,6 +112,8 @@ class ShapeReconstructor(object):
 
         z_array_interp = []
         for i in range(voxels.shape[0]):
+            # if i > 100:
+            #     break
             voxel = np.round(voxels[i, :]).astype(int) - min_voxel
             z = grid_sdf[voxel[0] * (self.resolution-1):(voxel[0] + 1) * self.resolution - voxel[0],
                          voxel[1] * (self.resolution-1):(voxel[1] + 1) * self.resolution - voxel[1],
@@ -109,15 +121,32 @@ class ShapeReconstructor(object):
             z_array_interp.append(z)
         return z_array_interp
 
+    def get_surface_points(self, voxel):
+        surface = self.surface_points-voxel
+        dist = np.linalg.norm(surface, ord=np.inf, axis=-1)
+        selector = dist < (0.5 * self.voxel_size)
+        return surface[selector, :] / self.voxel_size
+
     def reconstruct_interp(self, return_raw=False):
         self.network.eval()
         z_array = []
+        z_masks = []
         mesh_verts = []
         mesh_faces = []
         num_exist_verts = 0
         for latent_ind in range(self.voxels.shape[0]):
             grid_pts, xyz = get_grid_points(
                 self.resolution, range=[-.5, .5], device=self.device)
+            # if latent_ind > 100:
+            #     break
+            print(latent_ind)
+            voxel = self.voxels[latent_ind, :]
+            dist = self.surface_pts.kneighbors(
+                (grid_pts.detach().cpu().numpy()) * self.voxel_size+voxel)[0]
+            z_mask = dist.reshape(
+                self.resolution, self.resolution,
+                self.resolution) < self.max_surface_dist
+
             if self.centroids is not None:
                 grid_pts -= self.centroids[latent_ind, :] / self.voxel_size
             if self.rotations is not None:
@@ -126,15 +155,22 @@ class ShapeReconstructor(object):
 
             latent_vec = self.latent_vecs[latent_ind, :]
             z = get_sdf(self.network, latent_vec, grid_pts)
+
             z_array.append(z.detach().cpu().numpy())
+            z_masks.append(z_mask)
         voxels = self.voxels / self.voxel_size - .5
         z_array = self.interp_border(z_array, voxels)
 
         for latent_ind in range(self.voxels.shape[0]):
+            # if latent_ind > 100:
+            #     break
             z = z_array[latent_ind]
+            mask = z_masks[latent_ind]
             has_surface = np.min(z) < 0 and np.max(z) > 0
             if has_surface:
-                surface = trace_surface_points(z, xyz)
+                surface = trace_surface_points(z, xyz, mask)
+                if surface is None:
+                    continue
                 verts, faces, _, _ = surface
                 verts -= .5
                 verts *= self.voxel_size
@@ -233,7 +269,7 @@ if __name__ == '__main__':
         network, latent_vecs, dataset.voxels,
         dataset.voxel_size, args.resolution,
         dataset.centroids, dataset.rotations,
-        device=device)
+        dataset.surface, max_surface_dist=0.02, device=device)
 
     if args.interp:
         recon_shape = reconstructor.reconstruct_interp()
@@ -247,6 +283,10 @@ if __name__ == '__main__':
         # recon_shape.export(os.path.join(args.output, "recon.ply"))
 
     if args.show:
+        # scene = m.Scene()
+        # scene.add_geometry(recon_shape)
+        # # scene.add_geometry(m.PointCloud(dataset.surface))
+        # scene.show()
         mesh = pyrender.Mesh.from_trimesh(recon_shape)
         scene = pyrender.Scene()
         scene.add(mesh)

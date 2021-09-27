@@ -98,13 +98,20 @@ class DepthSampler():
     def get_normal_map(self, pcd, inv_y_axis=False):
         dx = np.zeros_like(pcd)
         dy = np.zeros_like(pcd)
-        dx[:-1, ...] = pcd[1:, :, :] - pcd[:-1, :, :]
-        dy[:, :-1, :] = pcd[:, 1:, :] - pcd[:, :-1, :]
+        dx[1:-1, ...] = pcd[2:, :, :] - pcd[:-2, :, :]
+        dy[:, 1:-1, :] = pcd[:, 2:, :] - pcd[:, :-2, :]
+        ldx = np.linalg.norm(dx, axis=-1)
+        ldy = np.linalg.norm(dx, axis=-1)
         if inv_y_axis:
             normal = np.cross(dy, dx, axis=-1)
         else:
             normal = np.cross(dx, dy, axis=-1)
         normal = self.normalized(normal)
+        normal[-1, :, 2] = 0
+        normal[0, :, 2] = 0
+        normal[:, -1, 2] = 0
+        normal[:, 0, 2] = 0
+        normal[np.logical_or(ldx > 0.05, ldy > 0.05)] = 0
         return normal
 
     def load_depth_map(self, depth_path, down_scale=0, depth_scale=1000.0):
@@ -188,7 +195,7 @@ class DepthSampler():
         point_weights = []
         rand_weights = []
         for ind, (key, val) in enumerate(assoc.items()):
-            if ind % args.skip_frames != 0  or ind >= 5:
+            if ind % args.skip_frames != 0:  # or ind >= 5:
                 continue
 
             pose = trajectory[key]
@@ -201,7 +208,7 @@ class DepthSampler():
             depth = depth.reshape(-1, 1)
             pcd = pcd.reshape(-1, 3)
             rays = rays.reshape(-1, 3)
-            nonzeros = depth[:, 0] != 0
+            nonzeros = np.logical_and(depth[:, 0] != 0, normal[:, 2] != 0)
             depth = depth[nonzeros, :]
             rays = rays[nonzeros, :]
             pcd = pcd[nonzeros, :]
@@ -278,6 +285,7 @@ class DepthSampler():
         samples = []
         centroids = []
         rotations = []
+        measurements = []
         num_oriented_voxels = 0
         with torch.no_grad():
             voxels = torch.from_numpy(voxels).float().to(self.device)
@@ -319,12 +327,14 @@ class DepthSampler():
                 vsample[:, 4] = voxel_sdf
                 vsample[:, 5] = voxel_weights
                 samples.append(vsample.detach().cpu().numpy())
+                # measurements.append(voxel_surface.deatch().cpu().numpy())
                 #np.save(os.path.join(args.output, "{}.npy".format(vid)), vsample)
 
         print("total of {} voxels sampled with {} oriented".format(
             voxels.shape[0], num_oriented_voxels))
         samples = np.concatenate(samples, axis=0)
-        return samples, voxels, centroids, rotations
+        surface_points = surface_points.detach().cpu().numpy()
+        return samples, voxels, centroids, rotations, surface_points
 
 
 if __name__ == '__main__':
@@ -337,7 +347,6 @@ if __name__ == '__main__':
     parser.add_argument('--skip_frames', type=int, default=10)
     parser.add_argument('--min_surface_pts', type=int, default=2048)
     parser.add_argument('--transformer', type=str, default=None)
-    parser.add_argument('--num_samples', type=int, default=1000000)
     parser.add_argument("--cpu", action='store_true')
     args = parser.parse_args()
 
@@ -350,13 +359,15 @@ if __name__ == '__main__':
         args.depth_limit, args.min_surface_pts,
         args.transformer, device)
 
-    samples, voxels, centroids, rotations = sampler.sample_sdf()
+    samples, voxels, centroids, rotations, surface_points = sampler.sample_sdf()
     if not os.path.exists(args.output):
         os.makedirs(args.output, exist_ok=True)
 
     out = dict()
     sample_name = 'samples.npy'
+    measurement_name = 'surface.npy'
     out['samples'] = sample_name
+    out['surface'] = measurement_name
     out['voxels'] = voxels.detach().cpu().numpy().astype(np.float32)
     out['centroids'] = np.stack(centroids, axis=0).astype(np.float32)
     out['rotations'] = np.stack(rotations, axis=0).astype(np.float32)
@@ -365,3 +376,5 @@ if __name__ == '__main__':
         pickle.dump(out, f,  pickle.HIGHEST_PROTOCOL)
     np.save(os.path.join(args.output, sample_name),
             samples.astype(np.float32))
+    np.save(os.path.join(args.output, measurement_name),
+            surface_points.astype(np.float32))

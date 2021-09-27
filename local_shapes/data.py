@@ -23,8 +23,11 @@ class SampleDataset(Dataset):
         if training:
             train_data = os.path.join(data_path, raw_data['samples'])
             self.samples = np.load(train_data)
+            self.surface = None
         else:
             self.samples = None
+            eval_data = os.path.join(data_path, raw_data['surface'])
+            self.surface = np.load(eval_data)
 
         if orient:
             self.rotations = raw_data.get('rotations', None)
