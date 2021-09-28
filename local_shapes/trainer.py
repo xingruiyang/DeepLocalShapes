@@ -115,7 +115,7 @@ class NetworkTrainer(object):
 
                 sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
                 latent_loss = latents.abs().mean()
-                loss = sdf_loss + latent_loss * 1e-2
+                loss = sdf_loss + latent_loss * 1e-3
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -161,17 +161,11 @@ class NetworkTrainer(object):
                     centroids=self.centroids,
                     rotations=self.rotations,
                     device=self.device)
-                shape, verts, faces = reconstructor.reconstruct_interp(True)
-                vertex_tensor = torch.from_numpy(verts).float()
-                face_tensor = torch.from_numpy(faces).int()
-                self.logger.add_mesh(
-                    "train",
-                    vertices=vertex_tensor.unsqueeze(0),
-                    # faces=face_tensor.unsqueeze(0),
-                    global_step=epoch)
-                if self.gt_points is not None:
+                shape = reconstructor.reconstruct_interp()
+                if self.gt_points is not None and shape is not None:
                     recon_points = shape.sample(self.num_samples)
-                    dist = chamfer_distance(self.gt_points, recon_points, direction='bi')
+                    dist = chamfer_distance(
+                        self.gt_points, recon_points, direction='bi')
                     self.logger.add_scalar("train/chamfer_dist", dist, epoch)
         save_ckpts(self.output, self.network,
                    self.optimizer,
@@ -207,7 +201,7 @@ if __name__ == '__main__':
     net_args = {"d_in": args.latent_size + 3, "dims": [128, 128, 128]}
     network = ImplicitNet(**net_args).to(device)
 
-    dataset = SampleDataset(args.data, args.orient, True)
+    dataset = SampleDataset(args.data, args.orient, training=True)
     latent_vecs = torch.zeros((dataset.num_latents, args.latent_size))
     latent_vecs = latent_vecs.to(device)
     torch.nn.init.normal_(latent_vecs, 0, 0.01**2)

@@ -110,7 +110,7 @@ class LatentOptimizer(object):
 
                 sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
                 latent_loss = latents.abs().mean()
-                loss = sdf_loss + latent_loss * 1e-4
+                loss = sdf_loss + latent_loss * 1e-3
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -166,21 +166,14 @@ class LatentOptimizer(object):
                     centroids=self.centroids,
                     rotations=self.rotations,
                     device=self.device)
-                shape, verts, faces = reconstructor.reconstruct_interp(True)
-                vertex_tensor = torch.from_numpy(verts).float()
-                face_tensor = torch.from_numpy(faces).int()
-                self.logger.add_mesh(
-                    "eval",
-                    vertices=vertex_tensor.unsqueeze(0),
-                    # faces=face_tensor.unsqueeze(0),
-                    global_step=epoch)
-                if self.gt_points is not None:
+                shape = reconstructor.reconstruct_interp()
+                if self.gt_points is not None and shape is not None:
                     recon_points = shape.sample(self.num_samples)
                     dist = chamfer_distance(
                         self.gt_points, recon_points, direction='bi')
                     self.logger.add_scalar("eval/chamfer_dist", dist, epoch)
-                shape.export(os.path.join(
-                    self.output, "ckpt_{}_mesh.ply".format(epoch)))
+                    shape.export(os.path.join(
+                        self.output, "ckpt_{}_mesh.ply".format(epoch)))
 
 
 if __name__ == '__main__':
@@ -210,7 +203,7 @@ if __name__ == '__main__':
     load_model(args.ckpt, network, device)
 
     eval_data = SampleDataset(
-        args.data, args.orient, True)
+        args.data, args.orient, training=True)
     logger = SummaryWriter(os.path.join(args.output, 'logs/'))
     latent_optim = LatentOptimizer(
         network,
