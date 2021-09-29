@@ -1,0 +1,17 @@
+{
+    "Network": "local_shapes.network.ImplicitNet",
+    "Dataset": "local_shapes.data.SampleDataset",
+    "Input": "output/train/",
+    "Output": "output/train/125",
+    "NetworkParams": {
+        "d_in": 125,
+        "dims": [
+            125,
+            125,
+            125
+        ],
+        "use_tanh": true,
+        "clamp_dist": 0.1,
+        "act_fn": "leaky_relu"
+    }
+}

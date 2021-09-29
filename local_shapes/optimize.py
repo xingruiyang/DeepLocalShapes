@@ -88,19 +88,20 @@ class LatentOptimizer(object):
                 latents = torch.index_select(self.latent_vecs, 0, latent_ind)
 
                 if self.centroids is not None:
-                    centre = torch.index_select(self.centroids, 0, latent_ind)
-                    points -= centre * input_scale
+                    centroid = torch.index_select(
+                        self.centroids, 0, latent_ind)
+                    points -= centroid * input_scale
 
                 if self.rotations is not None:
-                    rot = torch.index_select(
+                    rotation = torch.index_select(
                         self.rotations, 0, latent_ind)
                     points = torch.bmm(
                         points.unsqueeze(1),
-                        rot.transpose(1, 2)).squeeze()
+                        rotation.transpose(1, 2)).squeeze()
 
                 points = torch.cat([latents, points], dim=-1)
                 surface_pred = self.network(points).squeeze()
-                sdf_values = torch.tanh(sdf_values)
+                # sdf_values = torch.tanh(sdf_values)
 
                 if self.clamp:
                     surface_pred = torch.clamp(
@@ -137,7 +138,7 @@ class LatentOptimizer(object):
                         batch_latent_loss/batch_steps))
 
             self.save_latents(os.path.join(self.output, 'latest_latents.npy'))
-            if self.ckpt_freq > 0 and n_iter % self.ckpt_freq == 0:
+            if (self.ckpt_freq > 0 and n_iter % self.ckpt_freq == 0) or n_iter == (num_epochs-1):
                 self.save_ckpt(n_iter)
 
     def update_lr(self, iter, init_lr):

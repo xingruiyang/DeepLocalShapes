@@ -144,7 +144,7 @@ class NetworkTrainer(object):
             save_latest(self.output, self.network,
                         self.optimizer, self.latent_vecs, n_iter)
 
-            if self.ckpt_freq > 0 and n_iter % self.ckpt_freq == 0:
+            if (self.ckpt_freq > 0 and n_iter % self.ckpt_freq == 0) or n_iter==(num_epochs-1):
                 self.save_ckpt(n_iter)
 
     def save_ckpt(self, epoch=0):

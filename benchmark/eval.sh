@@ -6,7 +6,7 @@ network=$3
 LATENT_SIZE=$4
 CLAMP_DIST=$5
 VOXLE_SIZE=0.1;
-NUM_EPOCHS=50;
+NUM_EPOCHS=100;
 BATCH_SIZE=10000;
 
 if [ -z $1 ] || [ -z $2 ]; then
@@ -41,25 +41,25 @@ set -e
 #         --transformer models/transformer.pth;
 # fi
 
-if [ ! -f $output/aligned/ckpt_49_latents.npy ]; then 
+if [ ! -f $output/aligned/ckpt_99_latents.npy ]; then 
     echo "INFO: Optimizing aligned latent vectors";
     python3 local_shapes/optimize.py \
-        $network/aligned/ckpt_49_model.pth \
+        $network/aligned/latest_model.pth \
         $input \
         $output/aligned \
         --batch_size $BATCH_SIZE \
         --clamp_dist $CLAMP_DIST \
-        --ckpt_freq 1 \
+        --ckpt_freq 10 \
         --orient \
         --num_epochs $NUM_EPOCHS \
         --gt_mesh $input/gt.ply \
         --latent_size $LATENT_SIZE;
 fi
 
-if [ ! -f $output/unaligned/ckpt_49_latents.npy ]; then
+if [ ! -f $output/unaligned/ckpt_99_latents.npy ]; then
     echo "INFO: Optimizing unaligned latent vectors";
     python3 local_shapes/optimize.py \
-        $network/unaligned/ckpt_49_model.pth \
+        $network/unaligned/latest_model.pth \
         $input \
         $output/unaligned \
         --batch_size $BATCH_SIZE \

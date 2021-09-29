@@ -5,7 +5,7 @@ output=$2;
 LATENT_SIZE=$3;
 CLAMP_DIST=$4;
 VOXLE_SIZE=0.1;
-NUM_EPOCHS=50;
+NUM_EPOCHS=100;
 BATCH_SIZE=10000;
 
 if [ -z $1 ] || [ -z $2 ]; then
@@ -42,21 +42,21 @@ set -e
 #         --transformer models/transformer.pth;
 # fi
 
-if [ ! -f $output/aligned/ckpt_49_model.pth ]; then
+if [ ! -f $output/aligned/ckpt_99_model.pth ]; then
     echo "INFO: Training aligned network";
     python3 local_shapes/trainer.py \
         $input \
         $output/aligned \
         --batch_size $BATCH_SIZE \
         --clamp_dist $CLAMP_DIST \
-        --ckpt_freq 1 \
+        --ckpt_freq 10 \
         --orient \
         --gt_mesh $input/gt.ply \
         --num_epochs $NUM_EPOCHS \
         --latent_size $LATENT_SIZE;
 fi
 
-if [ ! -f $output/unaligned/ckpt_49_model.pth ]; then
+if [ ! -f $output/unaligned/ckpt_99_model.pth ]; then
     echo "INFO: Training unaligned network";
     python3 local_shapes/trainer.py \
         $input \

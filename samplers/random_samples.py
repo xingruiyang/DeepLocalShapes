@@ -33,7 +33,7 @@ class SampleGenerator(object):
         self.min_surface_pts = min_surface_pts
         self.pts_per_shapes = pts_per_shapes
         self.shape_type = [
-            'cuboid',  'cylinder', 'cone', 'ellipsoid']
+            'cuboid',  'cylinder',  'ellipsoid']
         self.all_samples = []
         self.all_voxels = []
         self.all_centroids = []
@@ -104,12 +104,12 @@ class SampleGenerator(object):
         random_ind = torch.randperm(
             pts.shape[0])[:self.min_surface_pts]
         voxel_surface = pts[random_ind, :]
-        centre = torch.mean(voxel_surface, dim=0)
-        volume_surface = (voxel_surface-centre) / (1.5*self.voxel_size)
+        centroid = torch.mean(voxel_surface, dim=0)
+        volume_surface = (voxel_surface-centroid) / (1.5*self.voxel_size)
         volume_surface = volume_surface[None, ...].float()
         orientation = self.network(
-            volume_surface, transpose_input=True)
-        return centre, orientation[0, ...]
+            volume_surface, transpose_input=True)[0, ...]
+        return centroid, orientation
 
     def gen_samples(self, shape, voxel_id_start, show=False):
         surface_point_cloud = mesh_to_sdf.get_surface_point_cloud(shape)
@@ -158,7 +158,7 @@ class SampleGenerator(object):
                         centroid = torch.mean(voxel_surface, dim=0)
 
                 # self.display_sdf(voxel_pts, voxel_sdf)
-                print(voxel_pts.shape[0])
+                # print(voxel_pts.shape[0])
 
                 vsample = torch.zeros((voxel_pts.shape[0], 6)).to(self.device)
                 vsample[:, 0] = float(vid)+voxel_id_start
@@ -247,9 +247,9 @@ if __name__ == '__main__':
     parser.add_argument('--show', action='store_true')
     parser.add_argument('--network', type=str, default=None)
     parser.add_argument('--voxel-size', type=float, default=0.1)
-    parser.add_argument('--num-shapes', type=int, default=200)
+    parser.add_argument('--num-shapes', type=int, default=10)
     parser.add_argument('--min-surf-pts', type=int, default=2048)
-    parser.add_argument('--pts-per-shape', type=int, default=30000)
+    parser.add_argument('--pts-per-shape', type=int, default=50000)
     parser.add_argument("--cpu", action='store_true')
     args = parser.parse_args()
 
