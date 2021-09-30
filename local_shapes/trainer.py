@@ -90,6 +90,7 @@ class NetworkTrainer(object):
                 sdf_values = train_data[begin:end, 4].to(device) * input_scale
                 points = train_data[begin:end, 1:4].to(device) * input_scale
                 weights = train_data[begin:end, 5].to(device)
+                print(self.latent_vecs.shape)
                 latents = torch.index_select(self.latent_vecs, 0, latent_ind)
 
                 if self.centroids is not None:
@@ -105,7 +106,7 @@ class NetworkTrainer(object):
 
                 points = torch.cat([latents, points], dim=-1)
                 surface_pred = self.network(points).squeeze()
-                # sdf_values = torch.tanh(sdf_values)
+                sdf_values = torch.tanh(sdf_values)
 
                 if self.clamp:
                     surface_pred = torch.clamp(

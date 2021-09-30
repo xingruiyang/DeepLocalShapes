@@ -1,0 +1,16 @@
+{
+    "params": {
+        "latent_dim": 125,
+        "hidden_dims": [
+            128,
+            128,
+            128
+        ],
+        "use_tanh": false,
+        "input_scale": -1,
+        "clamp_dist": -1,
+        "act_fn": "leaky_relu",
+        "optimizer": "Adam",
+        "freeze_decoder": false
+    }
+}

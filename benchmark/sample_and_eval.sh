@@ -32,14 +32,14 @@ fi
 echo "INFO: Evaluating:" $input;
 echo "INFO: Output:" $output;
 
-# if [ ! -f $output/data/samples.pkl ]; then
-#     echo "INFO: Sampling mesh";
-#     python3 samplers/sample_mesh.py \
-#         $input \
-#         $output \
-#         --voxel_size $VOXLE_SIZE \
-#         --transformer models/transformer.pth;
-# fi
+if [ ! -f $output/data/samples.pkl ]; then
+    echo "INFO: Sampling mesh";
+    python3 samplers/sample_mesh.py \
+        $input \
+        $output \
+        --voxel_size $VOXLE_SIZE \
+        --transformer models/transformer.pth;
+fi
 
 if [ ! -f $output/aligned/ckpt_99_latents.npy ]; then 
     echo "INFO: Optimizing aligned latent vectors";

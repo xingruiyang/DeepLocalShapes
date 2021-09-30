@@ -27,9 +27,9 @@
 
 
 # echo "Evaluate on chairs...";
-# ./benchmark/eval.sh examples/chair.stl output/125/chair output/125/train 125 0.1 1
-# ./benchmark/eval.sh examples/chair.stl output/64/chair output/64/train 64 0.1 1
-# ./benchmark/eval.sh examples/chair.stl output/32/chair output/32/train 32 0.1 1
+# ./benchmark/eval.sh examples/chair.stl output/chair/125 output/train/125 125 -1 1
+# ./benchmark/eval.sh examples/chair.stl output/chair/64 output/train/64 64 -1 1
+# ./benchmark/eval.sh examples/chair.stl output/chair/32 output/train/32 32 -1 1
 
 # echo "Evaluate on tables...";
 # ./benchmark/eval.sh examples/table.stl output/125/table output/125/train 125 0.1 1
@@ -40,11 +40,14 @@
 # python3 samplers/random_samples.py output/eval --num-shapes 16 --network models/transformer.pth;
 
 # echo "Train on random shapes...";
-./benchmark/train.sh output/train output/train/125 125 -1
-./benchmark/train.sh output/train output/train/64 64 -1
-./benchmark/train.sh output/train output/train/32 32 -1
+# ./benchmark/train.sh output/train output/train/125 125 -1
+# ./benchmark/train.sh output/train output/train/64 64 -1
+# ./benchmark/train.sh output/train output/train/32 32 -1
 
 # echo "Evaluate on random shapes...";
-./benchmark/eval.sh output/eval output/eval/125 output/train/125 125 -1
-./benchmark/eval.sh output/eval output/eval/64 output/train/64 64 0.3
-./benchmark/eval.sh output/eval output/eval/32 output/train/32 32 0.3
+# ./benchmark/eval.sh output/eval output/eval/125 output/train/125 125 -1
+# ./benchmark/eval.sh output/eval output/eval/64 output/train/64 64 0.3
+# ./benchmark/eval.sh output/eval output/eval/32 output/train/32 32 0.3
+
+./benchmark/sample_and_train.sh examples/chair.stl output/chair 64 0.1 1
+./benchmark/sample_and_eval.sh examples/chair.stl output/chair/eval output/chair 64 0.1 1

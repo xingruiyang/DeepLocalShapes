@@ -33,11 +33,7 @@ class SampleGenerator(object):
         self.min_surface_pts = min_surface_pts
         self.pts_per_shapes = pts_per_shapes
         self.shape_type = [
-            'cuboid']
-        self.all_samples = []
-        self.all_voxels = []
-        self.all_centroids = []
-        self.all_rotations = []
+            'cuboid',  'cylinder',  'ellipsoid']
         if network is not None:
             self.network = PointNetTransformer().to(device)
             load_model(network, self.network)
@@ -91,7 +87,7 @@ class SampleGenerator(object):
 
     def normalize_shape(self, shape):
         vertices = shape.vertices - shape.bounding_box.centroid
-        vertices *= 0.8 / np.max(shape.bounding_box.extents)
+        vertices *= 0.2 / np.max(shape.bounding_box.extents)
         return trimesh.Trimesh(vertices=vertices, faces=shape.faces)
 
     def display_sdf(self, pts, sdf):
@@ -111,11 +107,11 @@ class SampleGenerator(object):
             volume_surface, transpose_input=True)[0, ...]
         return centroid, orientation
 
-    def gen_samples(self, shape, voxel_id_start, show=False):
-        bounding_radius = np.max(np.linalg.norm(shape.vertices, axis=1)) * 2
+    def gen_samples(self, shape, voxel_id_start=0, show=False):
+        bounding_radius = np.max(np.linalg.norm(shape.vertices, axis=1)) * 1.4
         surface_point_cloud = mesh_to_sdf.get_surface_point_cloud(shape)
         points, sdf, surface_points = surface_point_cloud.sample_sdf_near_surface(
-            self.pts_per_shapes, sign_method='depth', radius=bounding_radius)
+            self.pts_per_shapes, sign_method='normal', radius=bounding_radius)
 
         if show:
             self.display_sdf(points, sdf)
@@ -161,6 +157,7 @@ class SampleGenerator(object):
                 if show:
                     self.display_sdf(voxel_pts.detach().cpu(
                     ).numpy(), voxel_sdf.detach().cpu().numpy())
+                # print(voxel_pts.shape[0])
 
                 vsample = torch.zeros((voxel_pts.shape[0], 6)).to(self.device)
                 vsample[:, 0] = float(vid)+voxel_id_start
@@ -181,17 +178,6 @@ class SampleGenerator(object):
         return samples, voxels, centroids, rotations
 
     def generate_samples(self):
-        num_per_row = 1
-        for i in range(1, self.num_shapes):
-            if i * i >= self.num_shapes:
-                num_per_row = i
-                break
-
-        all_samples = []
-        all_voxels = []
-        all_centroids = []
-        all_rotations = []
-        voxel_id_start = 0
         scene = trimesh.Scene()
         for i in range(self.num_shapes):
             print("processing shape {}/{}".format(i, self.num_shapes))
@@ -202,45 +188,32 @@ class SampleGenerator(object):
             transform[:3, :3] = R.random().as_matrix()
             shape.apply_transform(transform)
 
-            samples, voxels, centroid, rotation = self.gen_samples(
-                shape, voxel_id_start, show=True)
-
-            y = i // num_per_row
-            x = i - y * num_per_row
-            all_samples.append(samples)
-            all_centroids.append(centroid)
-            all_rotations.append(rotation)
-            all_voxels.append(voxels+np.array([x, y, 0]))
-            voxel_id_start += voxels.shape[0]
             transform = np.eye(4)
-            transform[0, 3] = x
-            transform[1, 3] = y
+            transform[0, 3] = np.random.rand()*2-1
+            transform[1, 3] = np.random.rand()*2-1
+            transform[2, 3] = np.random.rand()*2-1
             scene.add_geometry(shape, transform=transform)
-   
-        # scene.show()
+        scene.show()
         self.scene = scene
-        self.all_voxels = np.concatenate(all_voxels, axis=0)
-        self.all_samples = np.concatenate(all_samples, axis=0)
-        self.all_centroids = np.concatenate(all_centroids, axis=0)
-        self.all_rotations = np.concatenate(all_rotations, axis=0)
-        print("total of {} voxels sampled with {} oriented".format(
-            self.all_voxels.shape[0], self.num_oriented))
 
     def save_samples(self, out_path):
         if not os.path.exists(out_path):
             os.makedirs(out_path, exist_ok=True)
-        self.scene.dump(True).export(os.path.join(out_path, "gt.ply"))
+        scene = self.scene.dump(True)
+        scene.export(os.path.join(out_path, "gt.ply"))
+        samples, voxels, centroids, rotations = self.gen_samples(
+            scene, show=True)
         out = dict()
         sample_name = 'samples.npy'
         out['samples'] = sample_name
-        out['voxels'] = self.all_voxels.astype(np.float32)
-        out['centroids'] = self.all_centroids.astype(np.float32)
-        out['rotations'] = self.all_rotations.astype(np.float32)
+        out['voxels'] = voxels.astype(np.float32)
+        out['centroids'] = centroids.astype(np.float32)
+        out['rotations'] = rotations.astype(np.float32)
         out['voxel_size'] = args.voxel_size
         with open(os.path.join(out_path, "samples.pkl"), "wb") as f:
             pickle.dump(out, f,  pickle.HIGHEST_PROTOCOL)
         np.save(os.path.join(out_path, sample_name),
-                self.all_samples.astype(np.float32))
+                samples.astype(np.float32))
 
 
 if __name__ == '__main__':
@@ -251,7 +224,7 @@ if __name__ == '__main__':
     parser.add_argument('--voxel-size', type=float, default=0.1)
     parser.add_argument('--num-shapes', type=int, default=10)
     parser.add_argument('--min-surf-pts', type=int, default=2048)
-    parser.add_argument('--pts-per-shape', type=int, default=50000)
+    parser.add_argument('--pts-per-shape', type=int, default=1500000)
     parser.add_argument("--cpu", action='store_true')
     args = parser.parse_args()
 

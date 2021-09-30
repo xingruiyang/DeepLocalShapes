@@ -101,7 +101,7 @@ class LatentOptimizer(object):
 
                 points = torch.cat([latents, points], dim=-1)
                 surface_pred = self.network(points).squeeze()
-                # sdf_values = torch.tanh(sdf_values)
+                sdf_values = torch.tanh(sdf_values)
 
                 if self.clamp:
                     surface_pred = torch.clamp(

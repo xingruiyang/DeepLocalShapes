@@ -14,34 +14,6 @@ fi
 
 set -e
 
-# if [ ! -z $5 ]; then
-#     normalized_output=$input;
-#     if [[ ! $normalized_output == *.ply ]]; then
-#         filename=$(echo $input|sed -e 's/\.[^./]*$//');
-#         normalized_input=$input
-#         input="${filename}_norm.ply";
-#         if [ ! -f $input ]; then
-#             echo "INFO: normalizing input";
-#             python3 samplers/normalize_mesh.py \
-#                 $normalized_input \
-#                 --output $input;
-#             echo "The input has been normalized to $input";
-#         fi
-#     fi
-# fi
-
-# echo "INFO: Evaluating:" $input;
-# echo "INFO: Output:" $output;
-
-# if [ ! -f $output/data/samples.pkl ]; then
-#     echo "INFO: Sampling mesh";
-#     python3 samplers/sample_mesh.py \
-#         $input \
-#         $output/data \
-#         --voxel_size $VOXLE_SIZE \
-#         --transformer models/transformer.pth;
-# fi
-
 if [ ! -f $output/aligned/ckpt_99_model.pth ]; then
     echo "INFO: Training aligned network";
     python3 local_shapes/trainer.py \

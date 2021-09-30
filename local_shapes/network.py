@@ -30,5 +30,5 @@ class ImplicitNet(nn.Module):
             x = lin(x)
             if layer < self.num_layers - 2:
                 x = self.activation(x)
-        # return self.tanh(x)
-        return x
+        return self.tanh(x)
+        # return x
