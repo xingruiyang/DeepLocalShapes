@@ -9,6 +9,7 @@ class SampleDataset(Dataset):
     def __init__(self,
                  data_path: str,
                  orient: bool = False,
+                 crop: bool = False,
                  training: bool = True):
         super(SampleDataset, self).__init__()
         self.root_path = data_path
@@ -19,13 +20,13 @@ class SampleDataset(Dataset):
         self.voxel_size = raw_data['voxel_size']
 
         self.num_latents = self.voxels.shape[0]
+        self.samples = None
+        self.surface = None
 
         if training:
             train_data = os.path.join(data_path, raw_data['samples'])
             self.samples = np.load(train_data)
-            self.surface = None
-        else:
-            self.samples = None
+        elif crop:
             eval_data = os.path.join(data_path, raw_data['surface'])
             self.surface = np.load(eval_data)
 

@@ -127,7 +127,7 @@ if __name__ == '__main__':
     parser.add_argument('output', type=str)
     parser.add_argument('--voxel_size', type=float, default=0.1)
     parser.add_argument('--min_surface_pts', type=int, default=2048)
-    parser.add_argument('--num_samples', type=int, default=1000000)
+    parser.add_argument('--num_samples', type=int, default=500000)
     parser.add_argument('--network', type=str, default=None)
     parser.add_argument('--show', action='store_true')
     parser.add_argument('--cpu', action='store_true')
@@ -157,6 +157,7 @@ if __name__ == '__main__':
     all_rotations = []
     voxel_id_start = 0
 
+    scene = trimesh.Scene()
     for i, model in enumerate(model_files):
         mesh = trimesh.load(os.path.join(args.input, model))
         samples, voxels, centroids, rotations = sampler.gen_samples(
@@ -170,17 +171,24 @@ if __name__ == '__main__':
         x = i - y * num_per_row
         all_voxels.append(voxels+np.array([x, y, 0]))
 
+        transform = np.eye(4)
+        transform[0, 3] = x
+        transform[1, 3] = y
+        scene.add_geometry(mesh, transform=transform)
+
+    scene = scene.dump(True)
     print("{} voxels sampled with {} aligned".format(
         voxel_id_start, sampler.num_aligned))
-        
+
     out = dict()
     sample_name = 'samples.npy'
     out['samples'] = sample_name
-    out['voxels'] = np.concatenate(voxels, axis=0).astype(np.float32)
-    out['centroids'] = np.concatenate(centroids, axis=0).astype(np.float32)
-    out['rotations'] = np.concatenate(rotations, axis=0).astype(np.float32)
+    out['voxels'] = np.concatenate(all_voxels, axis=0).astype(np.float32)
+    out['centroids'] = np.concatenate(all_centroids, axis=0).astype(np.float32)
+    out['rotations'] = np.concatenate(all_rotations, axis=0).astype(np.float32)
     out['voxel_size'] = args.voxel_size
     with open(os.path.join(args.output, "samples.pkl"), "wb") as f:
         pickle.dump(out, f,  pickle.HIGHEST_PROTOCOL)
-    np.save(os.path.join(args.output, sample_name),
-            samples.astype(np.float32))
+    all_samples = np.concatenate(all_samples, axis=0).astype(np.float32)
+    np.save(os.path.join(args.output, sample_name), all_samples)
+    scene.export(os.path.join(args.output, "gt.ply"))

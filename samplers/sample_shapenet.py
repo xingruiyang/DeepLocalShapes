@@ -15,7 +15,7 @@ instance_id = {
     'table': '04379243'
 }
 
-num_samples_each = 40
+num_samples_each = 6
 
 
 def to_np_array(o3d_pcd):
@@ -81,7 +81,7 @@ def sample_sdf(mesh, num_points, voxel_size=0.05):
 
 if __name__ == '__main__':
     base_dir = "/workspace/dataset/ShapeNet/ShapeNetCore.v2"
-    out_path = "/workspace/dataset/output/shape_samples/"
+    out_path = "output/shape_samples/"
     os.makedirs(out_path, exist_ok=True)
     id = 0
     for key, value in instance_id.items():

@@ -7,6 +7,7 @@ LATENT_SIZE=$4
 CLAMP_DIST=$5
 VOXLE_SIZE=0.1;
 NUM_EPOCHS=100;
+CKPT_FREQ=1;
 BATCH_SIZE=10000;
 
 if [ -z $1 ] || [ -z $2 ]; then
@@ -32,7 +33,7 @@ fi
 echo "INFO: Evaluating:" $input;
 echo "INFO: Output:" $output;
 
-if [ ! -f $output/data/samples.pkl ]; then
+if [ ! -f $output/samples.pkl ]; then
     echo "INFO: Sampling mesh";
     python3 samplers/sample_mesh.py \
         $input \
@@ -49,7 +50,7 @@ if [ ! -f $output/aligned/ckpt_99_latents.npy ]; then
         $output/aligned \
         --batch_size $BATCH_SIZE \
         --clamp_dist $CLAMP_DIST \
-        --ckpt_freq 10 \
+        --ckpt_freq $CKPT_FREQ \
         --orient \
         --num_epochs $NUM_EPOCHS \
         --gt_mesh $input \
@@ -64,7 +65,7 @@ if [ ! -f $output/unaligned/ckpt_99_latents.npy ]; then
         $output/unaligned \
         --batch_size $BATCH_SIZE \
         --clamp_dist $CLAMP_DIST \
-        --ckpt_freq 10 \
+        --ckpt_freq $CKPT_FREQ \
         --num_epochs $NUM_EPOCHS \
         --gt_mesh $input \
         --latent_size $LATENT_SIZE;
