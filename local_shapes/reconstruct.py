@@ -1,6 +1,7 @@
 # import sys  # noqa
 # sys.path.insert(0, '/workspace')  # noqa
 
+import copy
 import open3d as o3d
 import argparse
 import os
@@ -183,6 +184,7 @@ class ShapeReconstructor(object):
             return m.Trimesh(mesh_verts, mesh_faces)
         else:
             return m.Trimesh(mesh_verts, mesh_faces), mesh_verts, mesh_faces
+
         # print(recon_shape.vertex_normals*0.5+0.5)
         # colors = recon_shape.vertex_normals #*0.5+0.5
         # colors[:, :2] *= -1
@@ -202,20 +204,23 @@ class ShapeReconstructor(object):
         for latent_ind in range(self.voxels.shape[0]):
             grid_pts, xyz = get_grid_points(
                 self.resolution, range=[-.5, .5], device=self.device)
+            grid_pts_origin = copy.deepcopy(grid_pts)
+            voxel = self.voxels[latent_ind, :]
+
+            centroid = self.centroids[latent_ind, :]
+            rotation = self.rotations[latent_ind, ...]
 
             z_mask = None
             if self.surface_pts is not None:
-                voxel = self.voxels[latent_ind, :]
                 z_mask = self.surface_pts.kneighbors(
                     (grid_pts.detach().cpu().numpy()) * self.voxel_size+voxel)[0]
                 z_mask = z_mask.reshape(
                     self.resolution, self.resolution, self.resolution) < self.max_surface_dist
 
             if self.centroids is not None:
-                grid_pts -= self.centroids[latent_ind, :] / self.voxel_size
+                grid_pts -= (centroid / self.voxel_size)
             if self.rotations is not None:
-                grid_pts = torch.matmul(
-                    grid_pts, self.rotations[latent_ind, ...].transpose(0, 1))
+                grid_pts = torch.matmul(grid_pts, rotation.transpose(0, 1))
 
             latent_vec = self.latent_vecs[latent_ind, :]
             z = get_sdf(self.network, latent_vec, grid_pts)
@@ -225,11 +230,20 @@ class ShapeReconstructor(object):
                 z = z.reshape(self.resolution,
                               self.resolution,
                               self.resolution)
-                surface = trace_surface_points(z, xyz)
+                surface = trace_surface_points(z, xyz, z_mask)
                 verts, faces, _, _ = surface
+                # print(np.min(verts), np.max(verts))
+
                 verts -= .5
+                # print(np.min(verts), np.max(verts))
+                # print(torch.min(grid_pts_origin), torch.max(grid_pts_origin))
+
+                # m.Scene([m.Trimesh(verts, faces),
+                #         m.PointCloud((grid_pts_origin.cpu()))]).show()
+
                 verts *= self.voxel_size
-                verts += self.voxels[latent_ind, :]
+                verts += voxel
+
                 faces += num_exist_verts
                 mesh_verts.append(verts)
                 mesh_faces.append(faces)

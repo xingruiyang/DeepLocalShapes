@@ -141,5 +141,4 @@ output/
 dataset/
 examples/
 *.ply
-output2
-output_test
+output

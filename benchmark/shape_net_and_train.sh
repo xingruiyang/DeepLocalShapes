@@ -24,6 +24,7 @@ if [ ! -f $output/aligned/ckpt_99_model.pth ]; then
         --clamp_dist $CLAMP_DIST \
         --ckpt_freq $CKPT_FREQ \
         --orient \
+        --gt_mesh $input/gt.ply \
         --num_epochs $NUM_EPOCHS \
         --latent_size $LATENT_SIZE;
 fi
@@ -36,6 +37,7 @@ if [ ! -f $output/unaligned/ckpt_99_model.pth ]; then
         --batch_size $BATCH_SIZE \
         --clamp_dist $CLAMP_DIST \
         --ckpt_freq $CKPT_FREQ \
+        --gt_mesh $input/gt.ply \
         --num_epochs $NUM_EPOCHS \
         --latent_size $LATENT_SIZE;
 fi

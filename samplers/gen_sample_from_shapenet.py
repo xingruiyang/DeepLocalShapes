@@ -59,7 +59,8 @@ class MeshSampler():
         bounding_radius = np.max(np.linalg.norm(shape.vertices, axis=1)) * 2
         surface_point_cloud = mesh_to_sdf.get_surface_point_cloud(shape)
         points, sdf, surface_points = surface_point_cloud.sample_sdf_near_surface(
-            self.pts_per_shapes, sign_method='depth', radius=bounding_radius)
+            self.pts_per_shapes, sign_method='depth', 
+            use_scans=False, radius=bounding_radius)
 
         if show:
             self.display_sdf(points, sdf)

@@ -95,11 +95,11 @@ class NetworkTrainer(object):
                 if self.centroids is not None:
                     centre = torch.index_select(self.centroids, 0, latent_ind)
                     points -= centre * input_scale
-
                 if self.rotations is not None:
                     rot = torch.index_select(
                         self.rotations, 0, latent_ind)
-                    points = torch.bmm(
+                    print(points.shape, rot.shape)
+                    points = torch.matmul(
                         points.unsqueeze(1),
                         rot.transpose(1, 2)).squeeze()
 

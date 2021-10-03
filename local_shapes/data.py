@@ -22,6 +22,8 @@ class SampleDataset(Dataset):
         self.num_latents = self.voxels.shape[0]
         self.samples = None
         self.surface = None
+        self.rotations = None
+        self.centroids = None
 
         if training:
             train_data = os.path.join(data_path, raw_data['samples'])
@@ -29,13 +31,10 @@ class SampleDataset(Dataset):
         elif crop:
             eval_data = os.path.join(data_path, raw_data['surface'])
             self.surface = np.load(eval_data)
-
         if orient:
             self.rotations = raw_data.get('rotations', None)
             self.centroids = raw_data.get('centroids', None)
-        else:
-            self.rotations = None
-            self.centroids = None
+
 
     def load_pickle(self, filename):
         with open(os.path.join(self.root_path, filename), "rb") as f:

@@ -52,10 +52,10 @@
 # ./benchmark/sample_and_train.sh examples/chair.stl output/chair 64 0.1 1
 # ./benchmark/sample_and_eval.sh examples/chair.stl output/chair/eval output/chair 64 0.1 1
 
-python3 samplers/gen_sample_from_shapenet.py \
-    output/shapenet/ \
-    output/shapenet-train \
-    --voxel_size 0.05 \
-    --network models/transformer.pth 
-./benchmark/shape_net_and_train.sh output/shapenet-train output/shapenet-train 128 -1 1
-./benchmark/sample_and_eval.sh examples/chair.stl output/chair output/shapenet-train 128 -1 1
+# python3 samplers/sample_3dwarehouse.py \
+    # dataset/3DWareHouse/ \
+    # output/shapenet-train \
+    # --voxel_size 0.03 \
+    # --network models/transformer.pth 
+# ./benchmark/shape_net_and_train.sh output/shapenet-train output/shapenet-train 125 -1
+./benchmark/sample_and_eval.sh examples/chair.stl output/chair output/shapenet-train 125 -1 1
