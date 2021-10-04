@@ -95,7 +95,7 @@ def sample_voxels(mesh, num_points, voxel_size=0.05):
         # transform[1, 3] = y
 
         sub_mesh = mesh.crop(bbox_outter)
-        pcd = sub_mesh.sample_points_uniformly(4096)
+        pcd = sub_mesh.sample_points_uniformly(8192)
         pcd.translate(-voxel)
         bbox_inner.translate(-voxel)
         bbox_outter.translate(-voxel)
@@ -132,7 +132,7 @@ def sample_voxels(mesh, num_points, voxel_size=0.05):
         geometries += [pcd, bbox_inner, bbox_outter]
 
         # o3d.visualization.draw_geometries([pcd, bbox_inner, bbox_outter])
-    # o3d.visualization.draw_geometries(geometries)
+    o3d.visualization.draw_geometries(geometries)
     return  samples, voxels, \
         np.stack(centroids, axis=0), np.stack(rotations, axis=0)
 
@@ -144,9 +144,9 @@ if __name__ == '__main__':
     parser.add_argument('--voxel_size', type=float, default=0.05)
     args = parser.parse_args()
     mesh = o3d.io.read_triangle_mesh(args.mesh)
-    mesh = mesh.subdivide_midpoint(number_of_iterations=5)
+    mesh = mesh.subdivide_midpoint(number_of_iterations=3)
     mesh.compute_vertex_normals()
-    # o3d.visualization.draw_geometries([mesh], mesh_show_wireframe=True)
+    o3d.visualization.draw_geometries([mesh], mesh_show_wireframe=True)
     samples, voxels, centroids, rotations = sample_voxels(mesh, 500000)
 
     os.makedirs(args.output, exist_ok=True)

@@ -1,7 +1,5 @@
-import pytorch_lightning as pl
 import torch
 from torch import nn
-from torch.nn import functional as F
 
 activations = {
     "leaky_relu": nn.LeakyReLU(negative_slope=0.01),
@@ -13,16 +11,15 @@ optimizers = {
 }
 
 
-class ImplicitNet(pl.LightningModule):
+class ImplicitNet(nn.Module):
     def __init__(self,
                  latent_dim,
                  hidden_dims,
                  use_tanh=False,
-                 input_scale=-1,
+                 voxel_size=1,
                  clamp_dist=-1,
                  act_fn="leaky_relu",
-                 optimizer="Adam",
-                 freeze_decoder=False):
+                 optimizer="Adam"):
         super(ImplicitNet, self).__init__()
 
         dims = [latent_dim+3] + hidden_dims + [1]
@@ -43,10 +40,9 @@ class ImplicitNet(pl.LightningModule):
             optimizer, torch.optim.Adam)
 
         self.clamp_dist = clamp_dist
-        self.input_scale = input_scale
+        self.input_scale = 1.0/voxel_size
         self.latent_vecs = None
         self.latent_dim = latent_dim
-        self.freeze_decoder = freeze_decoder
 
     def forward(self, inputs):
         x = inputs
@@ -62,9 +58,11 @@ class ImplicitNet(pl.LightningModule):
             raise ValueError(
                 "latent vectors are not initialized.\ncall 'initialize_latents' first")
 
-    def initialize_latents(self, num_latents):
-        self.latent_vecs = torch.zeros((num_latents, self.latent_dim))
+    def initialize_latents(self, num_latents, device=torch.device('cpu')):
+        self.latent_vecs = torch.zeros(
+            (num_latents, self.latent_dim)).to(device)
         torch.nn.init.normal_(self.latent_vecs, 0, 0.01**2)
+        self.latent_vecs.requires_grad_()
 
     def configure_optimizers(self):
         self.check_latent_vecs()
@@ -75,23 +73,27 @@ class ImplicitNet(pl.LightningModule):
             optim_params = [{
                 'params': self.parameters()},
                 {'params': self.latent_vecs}]
-
+        print(optim_params)
         return self.optimizer(optim_params, lr=1e-3)
 
     def training_step(self, train_batch, batch_idx):
         loss, sdf_loss, latent_loss = self.compute_loss(train_batch)
 
+        self.log('train/loss', loss.item())
         self.log('train/sdf_loss', sdf_loss.item())
         self.log('train/latent_loss', latent_loss.item())
 
         return loss
 
-    def train_dataloader(self):
-        pass
-
     def compute_loss(self, batch):
-        latent_ind, points, sdf_values, \
-            weights, centroids, rotations = batch
+        centroids = None
+        rotations = None
+        if len(batch) > 5:
+            latent_ind, points, sdf_values, \
+                weights, centroids, rotations = batch
+        else:
+            latent_ind, points, sdf_values, weights = batch
+
         latents = torch.index_select(
             self.latent_vecs, 0, latent_ind)
 
@@ -105,6 +107,8 @@ class ImplicitNet(pl.LightningModule):
 
         if self.input_scale > 0:
             points *= self.input_scale
+            sdf_values *= self.input_scale
+
         points = torch.cat([latents, points], dim=-1)
         sdf_pred = self.forward(points).squeeze()
 
@@ -123,10 +127,8 @@ class ImplicitNet(pl.LightningModule):
 
         return loss, sdf_loss, latent_loss
 
+    def on_save_checkpoint(self, checkpoint):
+        checkpoint["latent_vecs"] = self.latent_vecs
 
-if __name__ == '__main__':
-    decoder = ImplicitNet(125, [128, 128, 128])
-    decoder.initialize_latents(100)
-    trainer = pl.Trainer()
-    train_loader = None
-    trainer.fit(decoder, train_loader)
+    def on_load_checkpoint(self, checkpoint):
+        self.latent_vecs = checkpoint["latent_vecs"]

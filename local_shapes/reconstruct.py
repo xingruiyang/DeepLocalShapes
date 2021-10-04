@@ -207,9 +207,6 @@ class ShapeReconstructor(object):
             grid_pts_origin = copy.deepcopy(grid_pts)
             voxel = self.voxels[latent_ind, :]
 
-            centroid = self.centroids[latent_ind, :]
-            rotation = self.rotations[latent_ind, ...]
-
             z_mask = None
             if self.surface_pts is not None:
                 z_mask = self.surface_pts.kneighbors(
@@ -218,8 +215,10 @@ class ShapeReconstructor(object):
                     self.resolution, self.resolution, self.resolution) < self.max_surface_dist
 
             if self.centroids is not None:
+                centroid = self.centroids[latent_ind, :]
                 grid_pts -= (centroid / self.voxel_size)
             if self.rotations is not None:
+                rotation = self.rotations[latent_ind, ...]
                 grid_pts = torch.matmul(grid_pts, rotation.transpose(0, 1))
 
             latent_vec = self.latent_vecs[latent_ind, :]

@@ -58,4 +58,24 @@
     # --voxel_size 0.03 \
     # --network models/transformer.pth 
 # ./benchmark/shape_net_and_train.sh output/shapenet-train output/shapenet-train 125 -1
-./benchmark/sample_and_eval.sh examples/chair.stl output/chair output/shapenet-train 125 -1 1
+# ./benchmark/sample_and_eval.sh examples/chair.stl output/chair output/shapenet-train 125 -1 1
+
+for id in {0..19}; do
+./benchmark/shape_net_and_train.sh output/shape-samples/sofa/$id output/shape-logs/sofa/$id 125 -1
+done
+
+for id in {0..19}; do
+./benchmark/shape_net_and_train.sh output/shape-samples/airliner/$id output/shape-logs/airliner/$id 125 -1
+done
+
+for id in {0..19}; do
+./benchmark/shape_net_and_train.sh output/shape-samples/lamp/$id output/shape-logs/lamp/$id 125 -1
+done
+
+for id in {0..19}; do
+./benchmark/shape_net_and_train.sh output/shape-samples/chair/$id output/shape-logs/chair/$id 125 -1
+done
+
+for id in {0..19}; do
+./benchmark/shape_net_and_train.sh output/shape-samples/table/$id output/shape-logs/table/$id 125 -1
+done
