@@ -44,7 +44,7 @@ fi
 
 if [ ! -f $output/aligned/ckpt_99_model.pth ]; then
     echo "INFO: Training aligned network";
-    python3 local_shapes/trainer.py \
+    python3 deep_sdf/trainer.py \
         $output \
         $output/aligned \
         --batch_size $BATCH_SIZE \
@@ -58,7 +58,7 @@ fi
 
 if [ ! -f $output/unaligned/ckpt_99_model.pth ]; then
     echo "INFO: Training unaligned network";
-    python3 local_shapes/trainer.py \
+    python3 deep_sdf/trainer.py \
         $output \
         $output/unaligned \
         --batch_size $BATCH_SIZE \

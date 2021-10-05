@@ -7,12 +7,14 @@ from transformer import PointNetTransformer
 from utils import load_model
 
 
-class MeshSampler():
+class MeshSampler(object):
     def __init__(self,
                  voxel_size,
                  pts_per_voxel=4096,
                  network=None,
-                 normalize=False):
+                 normalize=False,
+                 use_depth=False):
+        super(MeshSampler, self).__init__()
         self.voxel_size = voxel_size
         self.pts_per_voxel = pts_per_voxel
         self.network = network
@@ -21,6 +23,7 @@ class MeshSampler():
             load_model(network, self.network)
             self.network.eval()
         self.normalize = normalize
+        self.use_depth = use_depth
 
     def display_sdf(self, pts, sdf):
         color = np.zeros_like(pts)
@@ -76,14 +79,18 @@ class MeshSampler():
             query_points.append(pcd+np.random.randn(*pcd.shape)*0.0025)
             query_points.append(pcd+np.random.randn(*pcd.shape)*0.00025)
             query_points.append(
-                (np.random.rand(1024, 3)*3-1.5)*self.voxel_size)
+                (np.random.rand(512, 3)*3-1.5)*self.voxel_size)
             query_points = np.concatenate(query_points, axis=0)
 
-            sdf = surface_points.get_sdf(query_points + voxel)
+            sdf, mask = surface_points.get_sdf(
+                query_points + voxel,
+                use_depth_buffer=self.use_depth)
+            sdf = sdf[mask]
+            query_points = query_points[mask]
 
             surface.append(pcd+voxel)
-            rand_surface.append(query_points[:pcd.shape[0]*2, :]+voxel)
-            rand_sdf.append(sdf[:pcd.shape[0]*2])
+            rand_surface.append(query_points+voxel)
+            rand_sdf.append(sdf)
 
             vsample = np.zeros((query_points.shape[0], 6))
             vsample[:, 0] = float(vid)

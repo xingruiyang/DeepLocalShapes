@@ -6,10 +6,11 @@ import torch
 import trimesh
 from torch.utils.tensorboard import SummaryWriter
 
-from data import SampleDataset
+from dataset import SampleDataset
+from losses import chamfer_distance
 from network import ImplicitNet
 from reconstruct import ShapeReconstructor
-from utils import chamfer_distance, load_model, log_progress
+from utils import load_model, log_progress
 
 
 class LatentOptimizer(object):
@@ -199,7 +200,7 @@ if __name__ == '__main__':
         os.makedirs(args.output, exist_ok=True)
     gt_mesh = trimesh.load(args.gt_mesh) if args.gt_mesh is not None else None
 
-    net_args = {"d_in": args.latent_size + 3, "dims": [128, 128, 128]}
+    net_args = {"latent_dim": args.latent_size, "hidden_dims": [128, 128, 128]}
     network = ImplicitNet(**net_args).to(device)
     load_model(args.ckpt, network, device)
 

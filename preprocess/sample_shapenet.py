@@ -17,21 +17,25 @@ if __name__ == '__main__':
     parser.add_argument('--voxel-size', type=float, default=0.05)
     parser.add_argument('--pts-per-voxel', type=int, default=4096)
     parser.add_argument('--network', type=str, default=None)
-    parser.add_argument('--random_rot', action='store_true')
+    parser.add_argument('--use-depth', action='store_true')
+    parser.add_argument('--random-rot', action='store_true')
     parser.add_argument('--normalize', action='store_true')
     args = parser.parse_args()
 
     cate_dir = {
-        'sofa': '04256520',
+        # 'sofa': '04256520',
         'airliner': '02691156',
-        'lamp': '03636649',
-        'chair': '03001627',
-        'table': '04379243'
+        # 'lamp': '03636649',
+        # 'chair': '03001627',
+        # 'table': '04379243'
     }
 
     sampler = MeshSampler(
-        args.voxel_size, args.pts_per_voxel,
-        args.network, args.normalize)
+        args.voxel_size,
+        args.pts_per_voxel,
+        args.network,
+        args.normalize,
+        args.use_depth)
 
     for key, value in cate_dir.items():
         input_dir_cat = os.path.join(args.in_dir, value)
@@ -52,7 +56,8 @@ if __name__ == '__main__':
             samples = sampler.sample_sdf(mesh, return_surface=True)
             samples, voxels, centroids, rotations, \
                 surface, rand_surface, rand_sdf = samples
-            surface_sdf = np.concatenate([rand_surface, rand_sdf[:,None]], axis=-1)
+            surface_sdf = np.concatenate(
+                [rand_surface, rand_sdf[:, None]], axis=-1)
 
             sample_name = 'samples.npy'
             surface_pts_name = 'surface_pts.npy'
@@ -79,7 +84,7 @@ if __name__ == '__main__':
             if isinstance(mesh, trimesh.Scene):
                 mesh = mesh.dump(True)
             mesh.export(os.path.join(model_path_out, "gt.ply"))
-            
+
             num_samples += 1
             if num_samples >= args.num_samples:
                 break

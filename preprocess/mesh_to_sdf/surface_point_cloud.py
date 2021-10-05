@@ -42,13 +42,14 @@ class SurfacePointCloud:
 
         else:
             distances, indices = self.kd_tree.query(query_points, k=sample_count)
-            distances = distances.astype(np.float32)
+            distances = distances[:, 0].astype(np.float32)
 
             closest_points = self.points[indices]
             direction_from_surface = query_points[:, np.newaxis, :] - closest_points
-            inside = np.einsum('ijk,ijk->ij', direction_from_surface, self.normals[indices]) < 0
-            inside = np.sum(inside, axis=1) > sample_count * 0.5
-            distances = distances[:, 0]
+            num_pos = np.einsum('ijk,ijk->ij', direction_from_surface, self.normals[indices]) > 0
+            num_pos = np.sum(num_pos, axis=1)
+            mask = np.logical_or(num_pos == 0,num_pos == sample_count)
+            inside = num_pos < sample_count * 0.5
             distances[inside] *= -1
 
             if return_gradients:
@@ -61,7 +62,7 @@ class SurfacePointCloud:
             gradients /= np.linalg.norm(gradients, axis=1)[:, np.newaxis]
             return distances, gradients
         else:
-            return distances
+            return distances, mask
 
     def get_sdf_in_batches(self, query_points, use_depth_buffer=False, sample_count=11, batch_size=1000000, return_gradients=False):
         if query_points.shape[0] <= batch_size:

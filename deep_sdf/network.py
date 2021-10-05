@@ -1,5 +1,8 @@
+import inspect
+import os
+
 import torch
-from torch import nn
+import torch.nn as nn
 
 activations = {
     "leaky_relu": nn.LeakyReLU(negative_slope=0.01),
@@ -44,6 +47,8 @@ class ImplicitNet(nn.Module):
         self.latent_vecs = None
         self.latent_dim = latent_dim
 
+        self.hparams = self.get_hparams()
+
     def forward(self, inputs):
         x = inputs
         for layer in range(0, self.num_layers - 1):
@@ -53,82 +58,49 @@ class ImplicitNet(nn.Module):
                 x = self.act_fn(x)
         return self.tanh(x) if self.use_tanh else x
 
-    def check_latent_vecs(self):
-        if self.latent_vecs is None:
-            raise ValueError(
-                "latent vectors are not initialized.\ncall 'initialize_latents' first")
+    def save_model(self, filename, epoch=0):
+        model_state_dict = {
+            "epoch": epoch,
+            "hparams": self.hparams,
+            "model_state_dict": self.state_dict()}
+        torch.save(model_state_dict, filename)
 
-    def initialize_latents(self, num_latents, device=torch.device('cpu')):
-        self.latent_vecs = torch.zeros(
-            (num_latents, self.latent_dim)).to(device)
-        torch.nn.init.normal_(self.latent_vecs, 0, 0.01**2)
-        self.latent_vecs.requires_grad_()
+    @staticmethod
+    def load_from_ckpt(cls, filename, device=torch.device('cpu')):
+        if not os.path.isfile(filename):
+            raise Exception(
+                'model state dict "{}" does not exist'.format(filename))
 
-    def configure_optimizers(self):
-        self.check_latent_vecs()
+        state_dict = torch.load(filename, map_location=device)
+        network = ImplicitNet(**state_dict['hparams']).to(device)
+        network.load_state_dict(state_dict["model_state_dict"])
+        return network, state_dict["epochs"]
 
-        if self.freeze_decoder:
-            optim_params = [self.latent_vecs]
-        else:
-            optim_params = [{
-                'params': self.parameters()},
-                {'params': self.latent_vecs}]
-        print(optim_params)
-        return self.optimizer(optim_params, lr=1e-3)
+    def get_hparams(self):
+        frame = inspect.currentframe().f_back
+        _, _, _, local_vars = inspect.getargvalues(frame)
+        cls = local_vars["__class__"]
+        init_parameters = inspect.signature(cls.__init__).parameters
+        init_params = list(init_parameters.values())
+        n_self = init_params[0].name
 
-    def training_step(self, train_batch, batch_idx):
-        loss, sdf_loss, latent_loss = self.compute_loss(train_batch)
+        def _get_first_if_any(params, param_type):
+            for p in params:
+                if p.kind == param_type:
+                    return p.name
+            return None
 
-        self.log('train/loss', loss.item())
-        self.log('train/sdf_loss', sdf_loss.item())
-        self.log('train/latent_loss', latent_loss.item())
-
-        return loss
-
-    def compute_loss(self, batch):
-        centroids = None
-        rotations = None
-        if len(batch) > 5:
-            latent_ind, points, sdf_values, \
-                weights, centroids, rotations = batch
-        else:
-            latent_ind, points, sdf_values, weights = batch
-
-        latents = torch.index_select(
-            self.latent_vecs, 0, latent_ind)
-
-        if centroids is not None:
-            points -= centroids
-
-        if rotations is not None:
-            points = torch.bmm(
-                points.unsqueeze(1),
-                rotations.transpose(1, 2)).squeeze()
-
-        if self.input_scale > 0:
-            points *= self.input_scale
-            sdf_values *= self.input_scale
-
-        points = torch.cat([latents, points], dim=-1)
-        sdf_pred = self.forward(points).squeeze()
-
-        if self.use_tanh:
-            sdf_values = torch.tanh(sdf_values)
-
-        if self.clamp_dist > 0:
-            sdf_pred = torch.clamp(
-                sdf_pred, -self.clamp_dist, self.clamp_dist)
-            sdf_values = torch.clamp(
-                sdf_values, -self.clamp_dist, self.clamp_dist)
-
-        sdf_loss = (((sdf_values-sdf_pred)*weights).abs()).mean()
-        latent_loss = latents.abs().mean()
-        loss = sdf_loss + latent_loss * 1e-3
-
-        return loss, sdf_loss, latent_loss
-
-    def on_save_checkpoint(self, checkpoint):
-        checkpoint["latent_vecs"] = self.latent_vecs
-
-    def on_load_checkpoint(self, checkpoint):
-        self.latent_vecs = checkpoint["latent_vecs"]
+        n_args = _get_first_if_any(
+            init_params, inspect.Parameter.VAR_POSITIONAL)
+        n_kwargs = _get_first_if_any(
+            init_params, inspect.Parameter.VAR_KEYWORD)
+        filtered_vars = [n for n in (n_self, n_args, n_kwargs) if n]
+        exclude_argnames = (*filtered_vars, "__class__", "frame", "frame_args")
+        # only collect variables that appear in the signature
+        local_args = {k: local_vars[k] for k in init_parameters.keys()}
+        # kwargs_var might be None => raised an error by mypy
+        if n_kwargs:
+            local_args.update(local_args.get(n_kwargs, {}))
+        local_args = {k: v for k, v in local_args.items()
+                      if k not in exclude_argnames}
+        return local_args

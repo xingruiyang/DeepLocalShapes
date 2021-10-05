@@ -43,7 +43,7 @@ echo "INFO: Output:" $output;
 
 if [ ! -f $output/aligned/ckpt_99_latents.npy ]; then 
     echo "INFO: Optimizing aligned latent vectors";
-    python3 local_shapes/optimize.py \
+    python3 deep_sdf/optimize.py \
         $network/aligned/latest_model.pth \
         $output \
         $output/aligned \
@@ -58,7 +58,7 @@ fi
 
 if [ ! -f $output/unaligned/ckpt_99_latents.npy ]; then
     echo "INFO: Optimizing unaligned latent vectors";
-    python3 local_shapes/optimize.py \
+    python3 deep_sdf/optimize.py \
         $network/unaligned/latest_model.pth \
         $output \
         $output/unaligned \

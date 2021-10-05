@@ -1,21 +1,17 @@
-# import sys  # noqa
-# sys.path.insert(0, '/workspace')  # noqa
-
 import argparse
 import os
 
-import numpy as np
 import torch
 import trimesh
 from torch.autograd import grad
 from torch.optim import Adam
-from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from data import BatchDataset, SampleDataset
+from dataset import SampleDataset
+from losses import chamfer_distance
 from network import ImplicitNet
 from reconstruct import ShapeReconstructor
-from utils import chamfer_distance, log_progress, save_ckpts, save_latest
+from utils import log_progress, save_ckpts, save_latest
 
 
 class NetworkTrainer(object):
@@ -61,7 +57,8 @@ class NetworkTrainer(object):
             self.rotations = torch.from_numpy(rotations).float()
             self.rotations = self.rotations.to(device)
 
-        self.train_data = DataLoader(train_data, batch_size=10, shuffle=True)
+        self.num_batch = (train_data.shape[0]-1)//batch_size+1
+        self.train_data = torch.from_numpy(train_data).float()
         self.global_step = 0
 
         if log_dir is not None:
@@ -80,11 +77,16 @@ class NetworkTrainer(object):
             batch_sdf_loss = 0
             batch_latent_loss = 0
             batch_steps = 0
-            for batch_idx, batch_data in enumerate(self.train_data):
-                latent_ind = batch_data[0].to(device)
-                sdf_values = batch_data[2].to(device) * input_scale
-                points = batch_data[1].to(device) * input_scale
-                weights = batch_data[3].to(device)
+            train_data = self.train_data[torch.randperm(
+                self.train_data.shape[0]), :]
+            for batch_idx in range(self.num_batch):
+                begin = batch_idx * self.batch_size
+                end = min(train_data.shape[0], (batch_idx+1)*self.batch_size)
+
+                latent_ind = train_data[begin:end, 0].to(device).int()
+                sdf_values = train_data[begin:end, 4].to(device) * input_scale
+                points = train_data[begin:end, 1:4].to(device) * input_scale
+                weights = train_data[begin:end, 5].to(device)
                 latents = torch.index_select(self.latent_vecs, 0, latent_ind)
 
                 if self.centroids is not None:
@@ -93,14 +95,11 @@ class NetworkTrainer(object):
                 if self.rotations is not None:
                     rot = torch.index_select(
                         self.rotations, 0, latent_ind)
-                    print(points.shape, rot.shape)
                     points = torch.matmul(
                         points.unsqueeze(1),
                         rot.transpose(1, 2)).squeeze()
 
-                latents = latents.unsqueeze(1)
-                all_latents = latents.repeat(1, points.shape[1], 1)
-                points = torch.cat([all_latents, points], dim=-1)
+                points = torch.cat([latents, points], dim=-1)
                 surface_pred = self.network(points).squeeze()
                 # sdf_values = torch.tanh(sdf_values)
 
@@ -110,7 +109,7 @@ class NetworkTrainer(object):
                     sdf_values = torch.clamp(
                         sdf_values, -self.clamp_dist, self.clamp_dist)
 
-                sdf_loss = (((sdf_values-surface_pred)*weights).abs().sum(-1)).mean()
+                sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
                 latent_loss = latents.abs().mean()
                 loss = sdf_loss + latent_loss * 1e-3
 
@@ -131,7 +130,7 @@ class NetworkTrainer(object):
                         'train/latent_loss', latent_loss.item(), self.global_steps)
 
                 log_progress(
-                    batch_steps, len(self.train_data),
+                    batch_steps, self.num_batch,
                     "Optimizing iter {}".format(n_iter),
                     "loss: {:.4f} sdf: {:.4f} latent: {:.4f}".format(
                         batch_loss/batch_steps,
@@ -195,10 +194,10 @@ if __name__ == '__main__':
 
     device = torch.device('cuda:0' if (
         (not args.cpu) and torch.cuda.is_available()) else 'cpu')
-    net_args = {"d_in": args.latent_size + 3, "dims": [128, 128, 128]}
+    net_args = {"latent_dim": args.latent_size, "hidden_dims": [128, 128, 128]}
     network = ImplicitNet(**net_args).to(device)
 
-    dataset = BatchDataset(args.data, args.orient, training=True)
+    dataset = SampleDataset(args.data, args.orient, training=True)
     latent_vecs = torch.zeros((dataset.num_latents, args.latent_size))
     latent_vecs = latent_vecs.to(device)
     torch.nn.init.normal_(latent_vecs, 0, 0.01**2)
@@ -208,7 +207,7 @@ if __name__ == '__main__':
         network,
         latent_vecs,
         dataset.voxels,
-        dataset,
+        dataset.samples,
         dataset.voxel_size,
         ckpt_freq=args.ckpt_freq,
         output=args.output,
