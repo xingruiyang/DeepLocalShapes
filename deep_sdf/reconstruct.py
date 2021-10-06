@@ -1,10 +1,11 @@
+import json
 import argparse
 import copy
 
 import numpy as np
 import open3d as o3d
 import torch
-import trimesh 
+import trimesh
 from skimage.measure import marching_cubes
 from sklearn.neighbors import NearestNeighbors
 
@@ -106,7 +107,7 @@ class ShapeReconstructor(object):
             grid_mask[voxel[0] * (self.resolution-1):(voxel[0] + 1) * self.resolution - voxel[0],
                       voxel[1] * (self.resolution-1):(voxel[1] + 1) * self.resolution - voxel[1],
                       voxel[2] * (self.resolution-1):(voxel[2] + 1) * self.resolution - voxel[2]] = z_masks[i]
-        return grid_sdf, grid_mask
+        return grid_sdf, grid_mask, min_voxel
 
     def reconstruct_interp(self):
         self.network.eval()
@@ -135,15 +136,16 @@ class ShapeReconstructor(object):
             z_array.append(z.detach().cpu().numpy())
             z_masks.append(z_mask)
 
-        z_array, z_masks = self.get_sdf_grid(z_array, z_masks)
+        z_array, z_masks, min_voxel = self.get_sdf_grid(z_array, z_masks)
         if (np.min(z_array) < 0 and np.max(z_array) > 0):
             surface = self.trace_surface_points(z_array, z_masks)
             if surface is not None:
                 verts, faces, _, _ = surface
-                verts -= .5
+                verts += min_voxel
+                verts *= self.voxel_size
                 return trimesh.Trimesh(verts, faces)
         print("reconstruction failed.")
-        raise NotImplementedError()
+        return None
 
     def reconstruct(self):
         self.network.eval()
@@ -196,25 +198,26 @@ class ShapeReconstructor(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('cfg', type=str)
     parser.add_argument('data', type=str)
     parser.add_argument('latents', type=str)
     parser.add_argument('network', type=str)
     parser.add_argument('--output', type=str, default=None)
     parser.add_argument('--resolution', type=int, default=8)
     parser.add_argument('--latent-size', type=int, default=125)
-    parser.add_argument('--max-surface-dist', type=float, default=0.1)
+    parser.add_argument('--max-surf-dist', type=float, default=0.01)
     parser.add_argument('--cpu', action='store_true')
     parser.add_argument('--crop', action='store_true')
     parser.add_argument('--render', action='store_true')
     parser.add_argument('--orient', action='store_true')
+    parser.add_argument('--show-surf', action='store_true')
     parser.add_argument('--no-interp', action='store_true')
     args = parser.parse_args()
 
     device = torch.device('cuda:0' if (
         (not args.cpu) and torch.cuda.is_available()) else 'cpu')
-    net_params = {'latent_dim': args.latent_size,
-                  'hidden_dims': [128, 128, 128]}
-    network = ImplicitNet(**net_params).to(device)
+    net_args = json.load(open(args.cfg, 'r'))
+    network = ImplicitNet(**net_args['params']).to(device)
     load_model(args.network, network, device)
     latent_vecs = load_latents(args.latents, device)
 
@@ -224,7 +227,7 @@ if __name__ == '__main__':
         network, latent_vecs, dataset.voxels,
         dataset.voxel_size, args.resolution,
         dataset.centroids, dataset.rotations,
-        dataset.surface, args.max_surface_dist,
+        dataset.surface, args.max_surf_dist,
         device=device)
 
     recon_shape = reconstructor.reconstruct(
@@ -235,4 +238,9 @@ if __name__ == '__main__':
     else:
         mesh = recon_shape.as_open3d
         mesh.compute_vertex_normals()
-        o3d.visualization.draw_geometries([mesh])
+        geometry = [mesh]
+        if args.show_surf:
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(dataset.surface)
+            geometry += [pcd]
+        o3d.visualization.draw_geometries(geometry)

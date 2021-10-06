@@ -1,3 +1,4 @@
+import json
 import argparse
 import os
 
@@ -82,11 +83,10 @@ class NetworkTrainer(object):
             for batch_idx in range(self.num_batch):
                 begin = batch_idx * self.batch_size
                 end = min(train_data.shape[0], (batch_idx+1)*self.batch_size)
-
-                latent_ind = train_data[begin:end, 0].to(device).int()
-                sdf_values = train_data[begin:end, 4].to(device) * input_scale
-                points = train_data[begin:end, 1:4].to(device) * input_scale
-                weights = train_data[begin:end, 5].to(device)
+                latent_ind = train_data[begin:end, 0].to(self.device).int()
+                sdf_values = train_data[begin:end, 4].to(self.device) * input_scale
+                points = train_data[begin:end, 1:4].to(self.device) * input_scale
+                weights = train_data[begin:end, 5].to(self.device)
                 latents = torch.index_select(self.latent_vecs, 0, latent_ind)
 
                 if self.centroids is not None:
@@ -101,9 +101,10 @@ class NetworkTrainer(object):
 
                 points = torch.cat([latents, points], dim=-1)
                 surface_pred = self.network(points).squeeze()
-                # sdf_values = torch.tanh(sdf_values)
+                if self.network.use_tanh:
+                    sdf_values = torch.tanh(sdf_values)
 
-                if self.clamp:
+                if self.network.clamp:
                     surface_pred = torch.clamp(
                         surface_pred, -self.clamp_dist, self.clamp_dist)
                     sdf_values = torch.clamp(
@@ -154,6 +155,7 @@ class NetworkTrainer(object):
                     self.latent_vecs,
                     self.voxels,
                     self.voxel_size,
+                    resolution=16,
                     centroids=self.centroids,
                     rotations=self.rotations,
                     device=self.device)
@@ -171,16 +173,17 @@ class NetworkTrainer(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument("cfg", type=str)
     parser.add_argument("data", type=str)
     parser.add_argument("output", type=str)
-    parser.add_argument("--log_dir", type=str, default=None)
-    parser.add_argument("--gt_mesh", type=str, default=None)
-    parser.add_argument("--batch_size", type=int, default=10000)
-    parser.add_argument("--num_epochs", type=int, default=100)
-    parser.add_argument("--latent_size", type=int, default=125)
-    parser.add_argument("--init_lr", type=float, default=1e-3)
-    parser.add_argument("--clamp_dist", type=float, default=-1)
-    parser.add_argument("--ckpt_freq", type=int, default=-1)
+    parser.add_argument("--log-dir", type=str, default=None)
+    parser.add_argument("--gt-mesh", type=str, default=None)
+    parser.add_argument("--batch-size", type=int, default=10000)
+    parser.add_argument("--num-epochs", type=int, default=100)
+    parser.add_argument("--latent-size", type=int, default=125)
+    parser.add_argument("--init-lr", type=float, default=1e-3)
+    parser.add_argument("--clamp-dist", type=float, default=-1)
+    parser.add_argument("--ckpt-freq", type=int, default=-1)
     parser.add_argument("--cpu", action='store_true')
     parser.add_argument("--orient", action='store_true')
     args = parser.parse_args()
@@ -194,8 +197,8 @@ if __name__ == '__main__':
 
     device = torch.device('cuda:0' if (
         (not args.cpu) and torch.cuda.is_available()) else 'cpu')
-    net_args = {"latent_dim": args.latent_size, "hidden_dims": [128, 128, 128]}
-    network = ImplicitNet(**net_args).to(device)
+    net_args = json.load(open(args.cfg, 'r'))
+    network = ImplicitNet(**net_args['params']).to(device)
 
     dataset = SampleDataset(args.data, args.orient, training=True)
     latent_vecs = torch.zeros((dataset.num_latents, args.latent_size))

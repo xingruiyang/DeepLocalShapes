@@ -28,8 +28,8 @@ class SampleDataset(Dataset):
         if training:
             train_data = os.path.join(data_path, raw_data['samples'])
             self.samples = np.load(train_data)
-        elif crop:
-            eval_data = os.path.join(data_path, raw_data['surface'])
+        if crop:
+            eval_data = os.path.join(data_path, raw_data['surface_pts'])
             self.surface = np.load(eval_data)
         if orient:
             self.rotations = raw_data.get('rotations', None)
@@ -50,6 +50,7 @@ class SampleDataset(Dataset):
             indices = self.samples[index, 0].astype(int)
             points = self.samples[index, 1:4].astype(np.float32)
             sdf = self.samples[index, 4].astype(np.float32)
-            return indices, points, sdf
+            weight = self.samples[index, 5].astype(np.float32)
+            return indices, points, sdf, weight
         else:
             return index, self.voxels[index, ...].astype(np.float32)

@@ -38,6 +38,8 @@ class MeshSampler(object):
         return rotation.squeeze().detach().numpy()
 
     def sample_sdf(self, mesh, return_surface=False):
+        if self.normalize:
+            mesh= mesh_to_sdf.scale_to_unit_sphere(mesh)
         surface_points = mesh_to_sdf.get_surface_point_cloud(
             mesh, scan_count=100)
 
@@ -76,8 +78,8 @@ class MeshSampler(object):
                 num_aligned += 1
 
             query_points = []
-            query_points.append(pcd+np.random.randn(*pcd.shape)*0.0025)
-            query_points.append(pcd+np.random.randn(*pcd.shape)*0.00025)
+            query_points.append(pcd+np.random.randn(*pcd.shape)*0.05)
+            query_points.append(pcd+np.random.randn(*pcd.shape)*0.005)
             query_points.append(
                 (np.random.rand(512, 3)*3-1.5)*self.voxel_size)
             query_points = np.concatenate(query_points, axis=0)

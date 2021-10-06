@@ -18,7 +18,7 @@ class ImplicitNet(nn.Module):
     def __init__(self,
                  latent_dim,
                  hidden_dims,
-                 use_tanh=False,
+                 use_tanh=True,
                  voxel_size=1,
                  clamp_dist=-1,
                  act_fn="leaky_relu",
@@ -43,6 +43,7 @@ class ImplicitNet(nn.Module):
             optimizer, torch.optim.Adam)
 
         self.clamp_dist = clamp_dist
+        self.clamp = clamp_dist > 0
         self.input_scale = 1.0/voxel_size
         self.latent_vecs = None
         self.latent_dim = latent_dim

@@ -4,12 +4,12 @@
         "hidden_dims": [
             128,
             128,
+            128,
             128
         ],
-        "use_tanh": false,
-        "clamp_dist": -1,
+        "use_tanh": true,
+        "clamp_dist": 0.2,
         "act_fn": "leaky_relu",
-        "optimizer": "Adam",
-        "freeze_decoder": false
+        "optimizer": "Adam"
     }
 }
