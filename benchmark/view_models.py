@@ -5,7 +5,7 @@ import numpy as np
 
 
 def text_3d(text, pos=None, direction=None, degree=0.0,
-            font='DejaVuSansMono.ttf',font_size=16):
+            font='DejaVuSansMono.ttf', font_size=16):
     """
     Generate a 3D text point cloud used for visualization.
     :param text: content of the text
@@ -33,7 +33,8 @@ def text_3d(text, pos=None, direction=None, degree=0.0,
     indices = np.indices([*img.shape[0:2], 1])[:, img_mask, 0].reshape(3, -1).T
 
     pcd = o3d.geometry.PointCloud()
-    pcd.colors = o3d.utility.Vector3dVector(img[img_mask, :].astype(float) / 255.0)
+    pcd.colors = o3d.utility.Vector3dVector(
+        img[img_mask, :].astype(float) / 255.0)
     pcd.points = o3d.utility.Vector3dVector(indices / 100.0)
 
     raxis = np.cross([0.0, 0.0, 1.0], direction)
@@ -50,28 +51,33 @@ def main(path):
     dirs = os.listdir(path)
     num_models = len(dirs)
 
-    num_per_row = 1
-    for i in range(num_models):
-        if i * i >= num_models:
-            num_per_row = i
-            break
+    for i in range(max(1,num_models//100)):
+        start = i * 100
+        end = min((i+1) * 100, num_models)
+        num_subset = end - start + 1
+        num_per_row = 1
+        for i in range(num_subset):
+            if i * i >= num_subset:
+                num_per_row = i
+                break
 
-    meshes = []
-    for i in range(num_models):
-        model_path = os.path.join(path, dirs[i], 'ckpt_99_mesh.ply')
-        print(i, dirs[i])
-        mesh = o3d.io.read_triangle_mesh(model_path)
-        mesh.compute_vertex_normals()
-        y = i // num_per_row
-        x = i - y * num_per_row
-        transform = np.eye(4)
-        transform[0, 3] = y
-        transform[1, 3] = x
-        mesh.transform(transform)
-        meshes.append(mesh)
-        meshes.append(text_3d(str(i), np.array([y-0.5, x+0.5, 0]),degree=-90))
+        meshes = []
+        for i in range(start, end):
+            model_path = os.path.join(path, dirs[i], 'aligned/ckpt_99_mesh.ply')
+            print(i, dirs[i])
+            mesh = o3d.io.read_triangle_mesh(model_path)
+            mesh.compute_vertex_normals()
+            y = i // num_per_row
+            x = i - y * num_per_row
+            transform = np.eye(4)
+            transform[0, 3] = y
+            transform[1, 3] = x
+            mesh.transform(transform)
+            meshes.append(mesh)
+            meshes.append(text_3d(str(i), np.array(
+                [y-0.5, x+0.5, 0]), degree=-90))
 
-    o3d.visualization.draw_geometries(meshes)
+        o3d.visualization.draw_geometries(meshes)
 
 
 if __name__ == '__main__':
