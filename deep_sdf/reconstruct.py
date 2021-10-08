@@ -177,14 +177,15 @@ class ShapeReconstructor(object):
                               self.resolution,
                               self.resolution)
                 surface = self.trace_surface_points(z, z_mask)
-                verts, faces, _, _ = surface
-                verts -= .5
-                verts *= self.voxel_size
-                verts += voxel
-                faces += num_exist_verts
-                mesh_verts.append(verts)
-                mesh_faces.append(faces)
-                num_exist_verts += verts.shape[0]
+                if surface is not None:
+                    verts, faces, _, _ = surface
+                    verts -= .5
+                    verts *= self.voxel_size
+                    verts += voxel
+                    faces += num_exist_verts
+                    mesh_verts.append(verts)
+                    mesh_faces.append(faces)
+                    num_exist_verts += verts.shape[0]
 
         if (len(mesh_verts) == 0):
             print("reconstruction failed.")

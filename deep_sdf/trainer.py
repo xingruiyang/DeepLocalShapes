@@ -106,9 +106,9 @@ class NetworkTrainer(object):
 
                 if self.network.clamp:
                     surface_pred = torch.clamp(
-                        surface_pred, -self.clamp_dist, self.clamp_dist)
+                        surface_pred, -self.network.clamp_dist, self.network.clamp_dist)
                     sdf_values = torch.clamp(
-                        sdf_values, -self.clamp_dist, self.clamp_dist)
+                        sdf_values, -self.network.clamp_dist, self.network.clamp_dist)
 
                 sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
                 latent_loss = latents.abs().mean()
