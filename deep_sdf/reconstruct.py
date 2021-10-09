@@ -83,20 +83,18 @@ class ShapeReconstructor(object):
         except:
             return None
 
-    def get_sdf_grid(self, z_array, z_masks, default_sdf_value=1000):
-        voxels = self.voxels / self.voxel_size - .5
+    def interp_border(self, z_array, voxels):
         min_voxel = np.round(np.amin(voxels, axis=0)).astype(int)
         max_voxel = np.round(np.amax(voxels, axis=0)).astype(int)
         grid_size = max_voxel - min_voxel + 1
-        grid_sdf = np.zeros(grid_size * (self.resolution-1) + 1).astype(float)
-        grid_mask = np.zeros(grid_size * (self.resolution-1) + 1).astype(bool)
-        grid_mask[...] = False
-        grid_sdf[...] = default_sdf_value
+        grid_sdf = np.zeros(grid_size * (self.resolution-1) + 1)
+        grid_sdf[:] = 10000
 
         for i in range(voxels.shape[0]):
-            voxel = np.round(voxels[i, :]).astype(int) - min_voxel
             z = z_array[i].reshape(
                 self.resolution, self.resolution, self.resolution)
+            voxel = np.round(voxels[i, :]).astype(int) - min_voxel
+
             z0 = grid_sdf[voxel[0] * (self.resolution-1):(voxel[0] + 1) * self.resolution - voxel[0],
                           voxel[1] * (self.resolution-1):(voxel[1] + 1) * self.resolution - voxel[1],
                           voxel[2] * (self.resolution-1):(voxel[2] + 1) * self.resolution - voxel[2]]
@@ -104,15 +102,23 @@ class ShapeReconstructor(object):
             grid_sdf[voxel[0] * (self.resolution-1):(voxel[0] + 1) * self.resolution - voxel[0],
                      voxel[1] * (self.resolution-1):(voxel[1] + 1) * self.resolution - voxel[1],
                      voxel[2] * (self.resolution-1):(voxel[2] + 1) * self.resolution - voxel[2]] = z
-            grid_mask[voxel[0] * (self.resolution-1):(voxel[0] + 1) * self.resolution - voxel[0],
-                      voxel[1] * (self.resolution-1):(voxel[1] + 1) * self.resolution - voxel[1],
-                      voxel[2] * (self.resolution-1):(voxel[2] + 1) * self.resolution - voxel[2]] = z_masks[i]
-        return grid_sdf, grid_mask, min_voxel
 
-    def reconstruct_interp(self):
+        z_array_interp = []
+        for i in range(voxels.shape[0]):
+            voxel = np.round(voxels[i, :]).astype(int) - min_voxel
+            z = grid_sdf[voxel[0] * (self.resolution-1):(voxel[0] + 1) * self.resolution - voxel[0],
+                         voxel[1] * (self.resolution-1):(voxel[1] + 1) * self.resolution - voxel[1],
+                         voxel[2] * (self.resolution-1):(voxel[2] + 1) * self.resolution - voxel[2]]
+            z_array_interp.append(z)
+        return z_array_interp
+
+    def reconstruct_interp(self, return_raw=False):
         self.network.eval()
         z_array = []
         z_masks = []
+        mesh_verts = []
+        mesh_faces = []
+        num_exist_verts = 0
         for latent_ind in range(self.voxels.shape[0]):
             voxel_grid = copy.deepcopy(self.grid_pts)
             z_mask = np.zeros(
@@ -136,16 +142,94 @@ class ShapeReconstructor(object):
             z_array.append(z.detach().cpu().numpy())
             z_masks.append(z_mask)
 
-        z_array, z_masks, min_voxel = self.get_sdf_grid(z_array, z_masks)
-        if (np.min(z_array) < 0 and np.max(z_array) > 0):
-            surface = self.trace_surface_points(z_array, z_masks)
-            if surface is not None:
-                verts, faces, _, _ = surface
-                verts += min_voxel
-                verts *= self.voxel_size
-                return trimesh.Trimesh(verts, faces)
-        print("reconstruction failed.")
-        return None
+        voxels = self.voxels / self.voxel_size - .5
+        z_array = self.interp_border(z_array, voxels)
+
+        for latent_ind in range(self.voxels.shape[0]):
+            z = z_array[latent_ind]
+            mask = z_masks[latent_ind]
+            has_surface = np.min(z) < 0 and np.max(z) > 0
+            if has_surface:
+                surface = self.trace_surface_points(z, mask)
+                if surface is not None:
+                    verts, faces, _, _ = surface
+                    verts -= .5
+                    verts *= self.voxel_size
+                    verts += self.voxels[latent_ind, :]
+                    faces += num_exist_verts
+                    mesh_verts.append(verts)
+                    mesh_faces.append(faces)
+                    num_exist_verts += verts.shape[0]
+
+        if len(mesh_verts) == 0:
+            return None
+        mesh_verts = np.concatenate(mesh_verts, axis=0)
+        mesh_faces = np.concatenate(mesh_faces, axis=0)
+        return trimesh.Trimesh(mesh_verts, mesh_faces)
+
+    # def get_sdf_grid(self, z_array, z_masks, default_sdf_value=1000):
+    #     voxels = self.voxels / self.voxel_size - .5
+    #     min_voxel = np.round(np.amin(voxels, axis=0)).astype(int)
+    #     max_voxel = np.round(np.amax(voxels, axis=0)).astype(int)
+    #     grid_size = max_voxel - min_voxel + 1
+    #     grid_sdf = np.zeros(grid_size * (self.resolution-1) + 1).astype(float)
+    #     grid_mask = np.zeros(grid_size * (self.resolution-1) + 1).astype(bool)
+    #     grid_mask[...] = False
+    #     grid_sdf[...] = default_sdf_value
+
+    #     for i in range(voxels.shape[0]):
+    #         voxel = np.round(voxels[i, :]).astype(int) - min_voxel
+    #         z = z_array[i].reshape(
+    #             self.resolution, self.resolution, self.resolution)
+    #         z0 = grid_sdf[voxel[0] * (self.resolution-1):(voxel[0] + 1) * self.resolution - voxel[0],
+    #                       voxel[1] * (self.resolution-1):(voxel[1] + 1) * self.resolution - voxel[1],
+    #                       voxel[2] * (self.resolution-1):(voxel[2] + 1) * self.resolution - voxel[2]]
+    #         z = np.minimum(z0, z)
+    #         grid_sdf[voxel[0] * (self.resolution-1):(voxel[0] + 1) * self.resolution - voxel[0],
+    #                  voxel[1] * (self.resolution-1):(voxel[1] + 1) * self.resolution - voxel[1],
+    #                  voxel[2] * (self.resolution-1):(voxel[2] + 1) * self.resolution - voxel[2]] = z
+    #         grid_mask[voxel[0] * (self.resolution-1):(voxel[0] + 1) * self.resolution - voxel[0],
+    #                   voxel[1] * (self.resolution-1):(voxel[1] + 1) * self.resolution - voxel[1],
+    #                   voxel[2] * (self.resolution-1):(voxel[2] + 1) * self.resolution - voxel[2]] = z_masks[i]
+    #     return grid_sdf, grid_mask, min_voxel
+
+    # def reconstruct_interp(self):
+    #     self.network.eval()
+    #     z_array = []
+    #     z_masks = []
+    #     for latent_ind in range(self.voxels.shape[0]):
+    #         voxel_grid = copy.deepcopy(self.grid_pts)
+    #         z_mask = np.zeros(
+    #             (self.resolution, self.resolution, self.resolution)).astype(bool)
+    #         z_mask[...] = True
+    #         if self.surface_pts is not None:
+    #             voxel = self.voxels[latent_ind, :]
+    #             z_mask = self.surface_pts.kneighbors(
+    #                 (voxel_grid.detach().cpu().numpy()) * self.voxel_size + voxel)[0]
+    #             z_mask = z_mask.reshape(
+    #                 self.resolution, self.resolution, self.resolution) < self.max_surface_dist
+
+    #         if self.centroids is not None:
+    #             voxel_grid -= self.centroids[latent_ind, :] / self.voxel_size
+    #         if self.rotations is not None:
+    #             voxel_grid = torch.matmul(
+    #                 voxel_grid, self.rotations[latent_ind, ...].transpose(0, 1))
+
+    #         latent_vec = self.latent_vecs[latent_ind, :]
+    #         z = self.get_sdf(self.network, latent_vec, voxel_grid)
+    #         z_array.append(z.detach().cpu().numpy())
+    #         z_masks.append(z_mask)
+
+    #     z_array, z_masks, min_voxel = self.get_sdf_grid(z_array, z_masks)
+    #     if (np.min(z_array) < 0 and np.max(z_array) > 0):
+    #         surface = self.trace_surface_points(z_array, z_masks)
+    #         if surface is not None:
+    #             verts, faces, _, _ = surface
+    #             verts += min_voxel
+    #             verts *= self.voxel_size
+    #             return trimesh.Trimesh(verts, faces)
+    #     print("reconstruction failed.")
+    #     return None
 
     def reconstruct(self):
         self.network.eval()

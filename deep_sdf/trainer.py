@@ -15,6 +15,14 @@ from reconstruct import ShapeReconstructor
 from utils import log_progress, save_ckpts, save_latest
 
 
+def compute_gradient(y, x, grad_outputs=None):
+    if grad_outputs is None:
+        grad_outputs = torch.ones_like(y)
+    grad = torch.autograd.grad(
+        y, [x], grad_outputs=grad_outputs, create_graph=True)[0]
+    return grad
+
+
 class NetworkTrainer(object):
     def __init__(self,
                  network,
@@ -84,8 +92,10 @@ class NetworkTrainer(object):
                 begin = batch_idx * self.batch_size
                 end = min(train_data.shape[0], (batch_idx+1)*self.batch_size)
                 latent_ind = train_data[begin:end, 0].to(self.device).int()
-                sdf_values = train_data[begin:end, 4].to(self.device) * input_scale
-                points = train_data[begin:end, 1:4].to(self.device) * input_scale
+                sdf_values = train_data[begin:end, 4].to(
+                    self.device) * input_scale
+                points = train_data[begin:end, 1:4].to(
+                    self.device) * input_scale
                 weights = train_data[begin:end, 5].to(self.device)
                 latents = torch.index_select(self.latent_vecs, 0, latent_ind)
 
@@ -112,7 +122,10 @@ class NetworkTrainer(object):
 
                 sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
                 latent_loss = latents.abs().mean()
-                loss = sdf_loss + latent_loss * 1e-3
+                gradient = compute_gradient(surface_pred, points)[weights==0, -3:]
+                grad_loss = torch.abs(gradient.norm(dim=-1) - 1).mean()
+                inter_loss = torch.exp(-1e2 * torch.abs(surface_pred[weights==0])).mean()
+                loss = sdf_loss + latent_loss * 1e-3 + 1e-1 * grad_loss #+ 1e-2 * inter_loss
 
                 self.optimizer.zero_grad()
                 loss.backward()

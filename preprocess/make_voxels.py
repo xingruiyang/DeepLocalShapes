@@ -69,23 +69,68 @@ class Voxelizer(object):
             rand_weight = weights[selector]
             rand_sdf_sample = rand_sdf[selector]
 
-            d = torch.rand((pcd.shape[0], 1)) * 0.015
+            global_pts = (torch.randn((512, 3)) * 3 - 1.5) * voxel_size
+            global_sdf = torch.ones((512, )) * -1
+            global_weight = torch.zeros((512, ))
+
+            # d = torch.rand((pcd.shape[0], 1)) * 0.015
+            # sample_pts = torch.cat([
+            #     # pcd,
+            #     pcd + normal*d.cuda(),
+            #     pcd - normal*d.cuda(),
+            #     rand_sample], axis=0)
+            # sample_sdf = torch.cat([
+            #     # torch.zeros((pcd.shape[0],)),
+            #     torch.zeros((pcd.shape[0],))+d[..., 0],
+            #     torch.zeros((pcd.shape[0],))-d[..., 0],
+            #     rand_sdf_sample], axis=0)
+            # sample_weights = torch.cat([
+            #     # weight,
+            #     weight,
+            #     weight,
+            #     rand_weight
+            # ], axis=0)
+
+            d = 0.015
+            d = torch.randn((pcd.shape[0], 1)) * d
             sample_pts = torch.cat([
                 # pcd,
                 pcd + normal*d.cuda(),
-                pcd - normal*d.cuda(),
-                rand_sample], axis=0)
+                rand_sample,
+                global_pts.cuda()
+            ], axis=0)
             sample_sdf = torch.cat([
                 # torch.zeros((pcd.shape[0],)),
                 torch.zeros((pcd.shape[0],))+d[..., 0],
-                torch.zeros((pcd.shape[0],))-d[..., 0],
-                rand_sdf_sample], axis=0)
+                rand_sdf_sample,
+                global_sdf
+            ], axis=0)
             sample_weights = torch.cat([
                 # weight,
                 weight,
-                weight,
-                rand_weight
+                rand_weight,
+                global_weight.cuda()
             ], axis=0)
+
+            # d = torch.rand((pcd.shape[0], 1)) * 0.03 - 0.015
+            # sample_pts = torch.cat([
+            #     # pcd,
+            #     pcd + normal*d.cuda(),
+            #     rand_sample,
+            #     global_pts.cuda(),
+            # ], axis=0)
+            # sample_sdf = torch.cat([
+            #     # torch.zeros((pcd.shape[0],)),
+            #     torch.zeros((pcd.shape[0],))+d[..., 0],
+            #     rand_sdf_sample,
+            #     global_sdf
+            # ], axis=0)
+            # sample_weights = torch.cat([
+            #     # weight,
+            #     weight,
+            #     rand_weight,
+            #     global_weight.cuda()
+            # ], axis=0)
 
             sample = np.zeros((sample_pts.shape[0], 6))
             sample[:, 0] = vid
