@@ -141,3 +141,5 @@ output/
 dataset/
 *.ply
 output
+build/
+.vscode
