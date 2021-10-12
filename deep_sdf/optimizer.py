@@ -1,3 +1,4 @@
+import json
 import argparse
 import os
 
@@ -11,6 +12,14 @@ from losses import chamfer_distance
 from network import ImplicitNet
 from reconstruct import ShapeReconstructor
 from utils import load_model, log_progress
+
+
+def compute_gradient(y, x, grad_outputs=None):
+    if grad_outputs is None:
+        grad_outputs = torch.ones_like(y)
+    grad = torch.autograd.grad(
+        y, [x], grad_outputs=grad_outputs, create_graph=True)[0]
+    return grad
 
 
 class LatentOptimizer(object):
@@ -102,17 +111,24 @@ class LatentOptimizer(object):
 
                 points = torch.cat([latents, points], dim=-1)
                 surface_pred = self.network(points).squeeze()
-                # sdf_values = torch.tanh(sdf_values)
 
-                if self.clamp:
+                if network.use_tanh:
+                    sdf_values = torch.tanh(sdf_values)
+
+                if self.network.clamp:
                     surface_pred = torch.clamp(
-                        surface_pred, -self.clamp_dist, self.clamp_dist)
+                        surface_pred, -self.network.clamp_dist, self.network.clamp_dist)
                     sdf_values = torch.clamp(
-                        sdf_values, -self.clamp_dist, self.clamp_dist)
+                        sdf_values, -self.network.clamp_dist, self.network.clamp_dist)
 
                 sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
                 latent_loss = latents.abs().mean()
                 loss = sdf_loss + latent_loss * 1e-3
+                # gradient = compute_gradient(surface_pred, points)[
+                #     weights == 0, -3:]
+                # grad_loss = torch.abs(gradient.norm(dim=-1) - 1).mean()
+                # inter_loss = torch.exp(-1e2 * torch.abs(surface_pred[weights==0])).mean()
+                # loss = sdf_loss + latent_loss * 1e-3 + 1e-1 * grad_loss  # + 1e-2 * inter_loss
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -180,6 +196,7 @@ class LatentOptimizer(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument("cfg", type=str)
     parser.add_argument('ckpt', type=str)
     parser.add_argument('data', type=str)
     parser.add_argument('output', type=str)
@@ -194,14 +211,14 @@ if __name__ == '__main__':
     parser.add_argument('--orient', action='store_true')
     args = parser.parse_args()
 
-    device = torch.device('cuda:0' if (
-        not args.cpu and torch.cuda.is_available()) else 'cpu')
     if not os.path.exists(args.output):
         os.makedirs(args.output, exist_ok=True)
     gt_mesh = trimesh.load(args.gt_mesh) if args.gt_mesh is not None else None
 
-    net_args = {"latent_dim": args.latent_size, "hidden_dims": [128, 128, 128]}
-    network = ImplicitNet(**net_args).to(device)
+    device = torch.device('cuda:0' if (
+        (not args.cpu) and torch.cuda.is_available()) else 'cpu')
+    net_args = json.load(open(args.cfg, 'r'))
+    network = ImplicitNet(**net_args['params']).to(device)
     load_model(args.ckpt, network, device)
 
     eval_data = SampleDataset(

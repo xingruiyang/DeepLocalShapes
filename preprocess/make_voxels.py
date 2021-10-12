@@ -7,15 +7,22 @@ import torch
 import trimesh
 from sklearn.neighbors import KDTree
 
+from transformer import PointNetTransformer
+from utils import load_model
+
 
 class Voxelizer(object):
-    def __init__(self, pcd_path, mnfld_pnts=4096) -> None:
+    def __init__(self, pcd_path, network=None, mnfld_pnts=4096) -> None:
         super().__init__()
         raw_data = np.load(pcd_path)
         self.points = raw_data[:, 1:4]
         self.normals = raw_data[:, 4:]
         self.weights = raw_data[:, 0]
         self.mnfld_pnts = mnfld_pnts
+        if network is not None:
+            self.network = PointNetTransformer()
+            load_model(network, self.network)
+            self.network.eval()
 
     def display_sdf(self, pts, sdf):
         color = np.zeros_like(pts)
@@ -23,7 +30,16 @@ class Voxelizer(object):
         color[sdf < 0, 2] = 1
         trimesh.PointCloud(pts, color).show()
 
+    def get_rotation(self, pts, centroid, voxel_size):
+        volume_surface = (pts - centroid) / (1.5 * voxel_size)
+        volume_surface = volume_surface[None, ...].float()
+        orientation = self.network(
+            volume_surface, transpose_input=True)
+        return orientation[0, ...]
+
     def create_voxels(self, voxel_size):
+        self.network.cuda()
+
         points = torch.from_numpy(self.points).cuda()
         normals = torch.from_numpy(self.normals).cuda()
         weights = torch.from_numpy(self.weights).cuda()
@@ -55,6 +71,18 @@ class Voxelizer(object):
             pcd = pcd[selector, :]
             normal = normals[selector, :]
             weight = weights[selector]
+
+            if pcd.shape[0] > 2048:
+                surf = pcd[torch.randperm(pcd.shape[0])[:2048], :]
+            else:
+                surf = pcd
+
+            centroid = torch.mean(surf, dim=0)
+            rotation = torch.eye(3)
+            if self.network is not None:
+                rotation = self.get_rotation(surf, centroid, voxel_size)
+            centroids.append(centroid.detach().cpu().numpy())
+            rotations.append(rotation.detach().cpu().numpy())
 
             if pcd.shape[0] > max_num_pcd:
                 rand_sel = torch.randperm(pcd.shape[0])[:max_num_pcd]
@@ -138,8 +166,6 @@ class Voxelizer(object):
             sample[:, 4] = sample_sdf.detach().cpu().numpy()
             sample[:, 5] = sample_weights.detach().cpu().numpy()
             samples.append(sample)
-            centroids.append(np.zeros(3,))
-            rotations.append(np.eye(3))
 
         samples = np.concatenate(samples, axis=0)
         centroids = np.stack(centroids, axis=0)
@@ -158,9 +184,10 @@ if __name__ == '__main__':
     parser.add_argument('output', type=str)
     parser.add_argument('--voxel-size', type=float, default=0.1)
     parser.add_argument('--mnfld-pnts', type=int, default=4096)
+    parser.add_argument('--network', type=str, default=None)
     args = parser.parse_args()
 
-    voxelizer = Voxelizer(args.pcd, args.mnfld_pnts)
+    voxelizer = Voxelizer(args.pcd, args.network, args.mnfld_pnts)
     samples = voxelizer.create_voxels(args.voxel_size)
     samples, voxels, centroids, rotations, surface = samples
 

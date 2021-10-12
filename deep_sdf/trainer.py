@@ -122,10 +122,11 @@ class NetworkTrainer(object):
 
                 sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
                 latent_loss = latents.abs().mean()
-                gradient = compute_gradient(surface_pred, points)[weights==0, -3:]
-                grad_loss = torch.abs(gradient.norm(dim=-1) - 1).mean()
-                inter_loss = torch.exp(-1e2 * torch.abs(surface_pred[weights==0])).mean()
-                loss = sdf_loss + latent_loss * 1e-3 + 1e-1 * grad_loss #+ 1e-2 * inter_loss
+                loss = sdf_loss + latent_loss * 1e-3
+                # gradient = compute_gradient(surface_pred, points)[weights==0, -3:]
+                # grad_loss = torch.abs(gradient.norm(dim=-1) - 1).mean()
+                # inter_loss = torch.exp(-1e2 * torch.abs(surface_pred[weights==0])).mean()
+                # loss = sdf_loss + latent_loss * 1e-3 + 1e-1 * grad_loss #+ 1e-2 * inter_loss
 
                 self.optimizer.zero_grad()
                 loss.backward()

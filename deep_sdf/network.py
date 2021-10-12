@@ -1,8 +1,10 @@
 import inspect
+import math
 import os
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 activations = {
     "leaky_relu": nn.LeakyReLU(negative_slope=0.01),
@@ -12,6 +14,46 @@ activations = {
 optimizers = {
     "Adam": torch.optim.Adam
 }
+
+
+class Sine(nn.Module):
+    def __init__(self, w0=1.):
+        super().__init__()
+        self.w0 = w0
+
+    def forward(self, x):
+        return torch.sin(self.w0 * x)
+
+
+class SirenModule(nn.Module):
+    def __init__(self, dim_in, dim_out, w0=1., c=6.,
+                 is_first=False, use_bias=True,
+                 activation=None):
+        super().__init__()
+        self.dim_in = dim_in
+        self.is_first = is_first
+
+        weight = torch.zeros(dim_out, dim_in)
+        bias = torch.zeros(dim_out) if use_bias else None
+        self.init_(weight, bias, c=c, w0=w0)
+
+        self.weight = nn.Parameter(weight)
+        self.bias = nn.Parameter(bias) if use_bias else None
+        self.activation = Sine(w0) if activation is None else activation
+
+    def init_(self, weight, bias, c, w0):
+        dim = self.dim_in
+
+        w_std = (1 / dim) if self.is_first else (math.sqrt(c / dim) / w0)
+        weight.uniform_(-w_std, w_std)
+
+        if bias is not None:
+            bias.uniform_(-w_std, w_std)
+
+    def forward(self, x):
+        out = F.linear(x, self.weight, self.bias)
+        out = self.activation(out)
+        return out
 
 
 class ImplicitNet(nn.Module):
@@ -31,6 +73,8 @@ class ImplicitNet(nn.Module):
         for layer in range(0, self.num_layers - 1):
             out_dim = dims[layer + 1]
             lin = nn.Linear(dims[layer], out_dim)
+            # is_first = True if layer == 0 else False
+            # lin = SirenModule(dims[layer], out_dim, 30 if is_first else 1, is_first=is_first)
             setattr(self, "lin_"+str(layer), lin)
 
         self.use_tanh = use_tanh
@@ -48,8 +92,6 @@ class ImplicitNet(nn.Module):
         self.latent_vecs = None
         self.latent_dim = latent_dim
 
-        self.hparams = self.get_hparams()
-
     def forward(self, inputs):
         x = inputs
         for layer in range(0, self.num_layers - 1):
@@ -62,7 +104,7 @@ class ImplicitNet(nn.Module):
     def save_model(self, filename, epoch=0):
         model_state_dict = {
             "epoch": epoch,
-            "hparams": self.hparams,
+            "hparams": None,
             "model_state_dict": self.state_dict()}
         torch.save(model_state_dict, filename)
 
@@ -76,32 +118,3 @@ class ImplicitNet(nn.Module):
         network = ImplicitNet(**state_dict['hparams']).to(device)
         network.load_state_dict(state_dict["model_state_dict"])
         return network, state_dict["epochs"]
-
-    def get_hparams(self):
-        frame = inspect.currentframe().f_back
-        _, _, _, local_vars = inspect.getargvalues(frame)
-        cls = local_vars["__class__"]
-        init_parameters = inspect.signature(cls.__init__).parameters
-        init_params = list(init_parameters.values())
-        n_self = init_params[0].name
-
-        def _get_first_if_any(params, param_type):
-            for p in params:
-                if p.kind == param_type:
-                    return p.name
-            return None
-
-        n_args = _get_first_if_any(
-            init_params, inspect.Parameter.VAR_POSITIONAL)
-        n_kwargs = _get_first_if_any(
-            init_params, inspect.Parameter.VAR_KEYWORD)
-        filtered_vars = [n for n in (n_self, n_args, n_kwargs) if n]
-        exclude_argnames = (*filtered_vars, "__class__", "frame", "frame_args")
-        # only collect variables that appear in the signature
-        local_args = {k: local_vars[k] for k in init_parameters.keys()}
-        # kwargs_var might be None => raised an error by mypy
-        if n_kwargs:
-            local_args.update(local_args.get(n_kwargs, {}))
-        local_args = {k: v for k, v in local_args.items()
-                      if k not in exclude_argnames}
-        return local_args
