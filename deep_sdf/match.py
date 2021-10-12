@@ -105,7 +105,7 @@ def run_icp_refine(
     train_voxels = np.round(train_voxels).astype(int)
     oct_tree = KDTree(train_voxels)
 
-    optimizer = torch.optim.Adam([best_r, best_t], lr=1e-2)
+    optimizer = torch.optim.SGD([best_r, best_t], lr=1e-4)
     pbar = tqdm(range(num_iterations))
     for n_iter in pbar:
         best_r_mat = gram_schmidt(best_r)
@@ -117,9 +117,6 @@ def run_icp_refine(
         dist, indices = oct_tree.query(query_np, k=1)
         dist = dist.astype(int)
 
-        query_np = torch.from_numpy(query_np).float().to(device)
-        query_np += 0.5
-
         indices = indices[dist == 0]
         point_indices = np.where(dist == 0)[0]
         if point_indices.shape[0] < min_inlier_points:
@@ -129,6 +126,9 @@ def run_icp_refine(
 
         point_indices = torch.from_numpy(point_indices).int().to(device)
         indices = torch.from_numpy(indices).int().to(device)
+        query_np = torch.from_numpy(query_np).float().to(device)
+        query_np += 0.5
+
         points = torch.index_select(
             query_pts/voxel_size-query_np, 0, point_indices)
         latents = torch.index_select(train_latents, 0, indices)
@@ -140,9 +140,9 @@ def run_icp_refine(
                 rotation.transpose(1, 2)).squeeze()
 
         inputs = torch.cat([latents, points], dim=-1)
-        sdf_pred = network(inputs)
+        sdf_pred = network(inputs).squeeze()
 
-        loss = sdf_pred.abs().mean()
+        loss = (sdf_pred.abs()).mean()
 
         optimizer.zero_grad()
         loss.backward()
@@ -204,6 +204,8 @@ def compute_rigid_transform(
         src_pts, dst_pts, src_features, dst_features, voxel_size*3)
     transform = result.transformation
 
+    print(transform)
+
     if has(network) and has(query_pts):
         transform = run_icp_refine(
             network, src_voxels, src_latents,
@@ -214,6 +216,7 @@ def compute_rigid_transform(
             rotations=rotations,
             use_gpu=True
         )
+    print(transform)
 
     return transform
 
