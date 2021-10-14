@@ -8,7 +8,7 @@
             128
         ],
         "use_tanh": true,
-        "clamp_dist": 0.3,
+        "clamp_dist": -1,
         "act_fn": "leaky_relu",
         "optimizer": "Adam"
     }

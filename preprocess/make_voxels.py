@@ -12,12 +12,14 @@ from utils import load_model
 
 
 class Voxelizer(object):
-    def __init__(self, pcd_path, network=None, mnfld_pnts=4096) -> None:
+    def __init__(self, pcd, network=None, mnfld_pnts=4096) -> None:
         super().__init__()
-        raw_data = np.load(pcd_path)
-        self.points = raw_data[:, 1:4]
-        self.normals = raw_data[:, 4:]
-        self.weights = raw_data[:, 0]
+
+        if isinstance(pcd, str):
+            pcd = np.load(pcd)
+        self.points = pcd[:, 1:4]
+        self.normals = pcd[:, 4:]
+        self.weights = pcd[:, 0]
         self.mnfld_pnts = mnfld_pnts
         if network is not None:
             self.network = PointNetTransformer()
@@ -37,7 +39,7 @@ class Voxelizer(object):
             volume_surface, transpose_input=True)
         return orientation[0, ...]
 
-    def create_voxels(self, voxel_size):
+    def create_voxels(self, voxel_size, out_path=None):
         self.network.cuda()
 
         points = torch.from_numpy(self.points).cuda()
@@ -62,6 +64,7 @@ class Voxelizer(object):
         samples = []
         centroids = []
         rotations = []
+        num_aligned = 0
         for vid in range(voxels.shape[0]):
             print("{}/{}".format(vid, voxels.shape[0]))
             voxel = voxels[vid, :]
@@ -81,6 +84,7 @@ class Voxelizer(object):
             rotation = torch.eye(3)
             if self.network is not None:
                 rotation = self.get_rotation(surf, centroid, voxel_size)
+                num_aligned += 1
             centroids.append(centroid.detach().cpu().numpy())
             rotations.append(rotation.detach().cpu().numpy())
 
@@ -172,9 +176,14 @@ class Voxelizer(object):
         rotations = np.stack(rotations, axis=0)
         voxels = voxels.detach().cpu().numpy()
 
-        print("{} points sampled with {} voxels aligned".format(
-            samples.shape[0], rotations.shape[0]))
-
+        if out_path is None:
+            print("{} points sampled with {} voxels aligned".format(
+                samples.shape[0], num_aligned))
+        else:
+            with open(os.path.join(out_path, 'meta.txt'), 'w') as f:
+                f.write("{} points sampled with {} aligned voxels".format(
+                    samples.shape[0], num_aligned))
+                f.close()
         return samples, voxels, centroids, rotations, surface
 
 

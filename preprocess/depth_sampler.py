@@ -5,23 +5,26 @@ import os
 import cv2
 import natsort
 import numpy as np
-import torch
 import trimesh
 
 
 class DepthSampler(object):
     def __init__(self,
                  scene_path,
+                 scene_id,
                  downsample,
                  skip_frames,
                  depth_limit=10,
-                 rand_smaple=False):
+                 rand_smaple=False,
+                 frame_selector=None):
         super(DepthSampler, self).__init__()
         self.scene_path = scene_path
+        self.scene_id = scene_id
         self.downsample = downsample
         self.skip_frames = skip_frames
         self.depth_limit = depth_limit
         self.rand_sample = rand_smaple
+        self.frame_selector = frame_selector
 
     def display_sdf(self, pts, sdf):
         color = np.zeros_like(pts)
@@ -79,18 +82,26 @@ class DepthSampler(object):
         intr //= (2**self.downsample)
         intr[2, 2] = 1
         depth_files = glob.glob(os.path.join(
-            self.scene_path,  "seq-01/*.depth.png"))
+            self.scene_path, self.scene_id, "*.depth.png"))
         depth_files = natsort.natsorted(depth_files)
 
         surface_points = []
         surface_normals = []
         point_weights = []
-        random_pnts = []
-        for index in range(0, len(depth_files), self.skip_frames):
+        init_pose = None
+        frame_selector = self.frame_selector if self.frame_selector is not None else range(
+            0, len(depth_files), self.skip_frames)
+        for index in frame_selector:
+            print(index)
             filepath = depth_files[index]
             pose_path = os.path.join(
-                self.scene_path, 'seq-01/frame-{:06d}.pose.txt'.format(index))
+                self.scene_path, self.scene_id, 'frame-{:06d}.pose.txt'.format(index))
             pose = np.loadtxt(pose_path).astype(float)
+            if init_pose is None:
+                init_pose = pose
+                pose = np.eye(4)
+            else:
+                pose = np.matmul(np.linalg.inv(init_pose), pose)
             depth = self.load_depth_map(filepath, self.downsample, 1000)
 
             pcd = self.get_point_cloud(depth, intr)
@@ -122,14 +133,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('scene_path', type=str)
     parser.add_argument('output', type=str)
+    parser.add_argument('--scene_id', type=str, default='seq-01')
     parser.add_argument('--downsample', type=int, default=0)
     parser.add_argument('--skip-frames', type=int, default=1)
     parser.add_argument('--depth-limit', type=float, default=10)
     args = parser.parse_args()
 
     sampler = DepthSampler(
-        args.scene_path, args.downsample,
-        args.skip_frames, args.depth_limit)
+        args.scene_path,
+        args.scene_id,
+        args.downsample,
+        args.skip_frames,
+        args.depth_limit)
     point_cloud = sampler.sample_sdf()
 
     os.makedirs(args.output, exist_ok=True)

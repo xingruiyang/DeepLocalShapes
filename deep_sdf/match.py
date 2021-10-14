@@ -1,4 +1,5 @@
 import argparse
+import copy
 import json
 import pickle
 
@@ -9,6 +10,7 @@ import trimesh
 from sklearn.neighbors import KDTree
 from tqdm import tqdm
 
+from line_mesh import LineMesh
 from network import ImplicitNet
 from utils import load_model
 
@@ -39,7 +41,7 @@ def execute_global_registration(
         dst_features,
         True,
         distance_threshold,
-        o3d.pipelines.registration.TransformationEstimationPointToPoint(True),
+        o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
         3,
         [
             o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(
@@ -47,7 +49,7 @@ def execute_global_registration(
             o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(
                 distance_threshold)
         ],
-        o3d.pipelines.registration.RANSACConvergenceCriteria(10000, 0.999))
+        o3d.pipelines.registration.RANSACConvergenceCriteria(1000000, 0.999))
     return result
 
 
@@ -93,6 +95,11 @@ def run_icp_refine(
     init_r = transform[:3, :3]
     init_t = transform[:3, 3]
 
+    best_transform = np.eye(4)
+    best_transform[:3, :3] = init_r
+    best_transform[:3, 3] = init_t
+    print("before: ", best_transform)
+
     best_r = torch.from_numpy(init_r).float().to(device)
     # column-wise flatten
     best_r = best_r[:3, :2].swapaxes(0, 1).reshape(-1, 6)
@@ -105,13 +112,13 @@ def run_icp_refine(
     train_voxels = np.round(train_voxels).astype(int)
     oct_tree = KDTree(train_voxels)
 
-    optimizer = torch.optim.SGD([best_r, best_t], lr=1e-4)
+    optimizer = torch.optim.Adam([best_r, best_t], lr=1e-2)
     pbar = tqdm(range(num_iterations))
     for n_iter in pbar:
         best_r_mat = gram_schmidt(best_r)
-        query_pts = torch.matmul(query_pcd - best_t, best_r_mat)
-        # query_pts = torch.matmul(
-        #     query_pcd, best_r_mat.transpose(0, 1)) + best_t
+        # query_pts = torch.matmul(query_pcd - best_t, best_r_mat)
+        query_pts = torch.matmul(
+            query_pcd, best_r_mat.transpose(0, 1)) + best_t
         query_np = query_pts.detach().cpu().numpy()
         query_np = query_np // voxel_size
         dist, indices = oct_tree.query(query_np, k=1)
@@ -136,13 +143,12 @@ def run_icp_refine(
             centroid = torch.index_select(centroids, 0, indices)
             rotation = torch.index_select(rotations, 0, indices)
             points = torch.matmul(
-                (points-centroid).unsqueeze(1),
+                (points-centroid/voxel_size).unsqueeze(1),
                 rotation.transpose(1, 2)).squeeze()
-
         inputs = torch.cat([latents, points], dim=-1)
         sdf_pred = network(inputs).squeeze()
 
-        loss = (sdf_pred.abs()).mean()
+        loss = (sdf_pred**2).mean()
 
         optimizer.zero_grad()
         loss.backward()
@@ -158,6 +164,63 @@ def run_icp_refine(
     return best_transform
 
 
+class LatentMatcher(object):
+    def __init__(
+            self,
+            src_voxels: np.ndarray,
+            dst_voxels:  np.ndarray,
+            src_latents: np.ndarray,
+            dst_latents: np.ndarray,
+            voxel_size: float,
+            query_pts: np.ndarray = None,
+            network: torch.nn.Module = None,
+            centroids: np.ndarray = None,
+            rotations: np.ndarray = None,
+            distance_threshold=3,) -> None:
+        super().__init__()
+        self.src_voxels = src_voxels
+        self.dst_voxels = dst_voxels
+        self.src_latents = src_latents
+        self.dst_latents = dst_latents
+        self.src_pts = to_o3d_pcd(src_voxels)
+        self.dst_pts = to_o3d_pcd(dst_voxels)
+        self.src_features = to_o3d_feat(src_latents)
+        self.dst_features = to_o3d_feat(dst_latents)
+        self.voxel_size = voxel_size
+        self.centroids = centroids
+        self.rotations = rotations
+        self.network = network
+        self.query_pts = query_pts
+        self.distance_threshold = distance_threshold * voxel_size
+
+    def compute_rigid_transform(self):
+        result = execute_global_registration(
+            self.src_pts,
+            self.dst_pts,
+            self.src_features,
+            self.dst_features,
+            self.distance_threshold)
+        return result
+
+    def refine_pose(self, transform, num_iter, use_gpu=True):
+        if not has(self.network):
+            print("network not given!")
+            return None
+
+        return run_icp_refine(
+            self.network,
+            self.src_voxels,
+            self.src_latents,
+            self.query_pts,
+            self.voxel_size,
+            transform,
+            num_iterations=num_iter,
+            centroids=self.centroids,
+            rotations=self.rotations,
+            use_gpu=use_gpu
+        )
+
+
 def load_data(args):
     input_data = dict()
     input_data['src_voxels'] = pickle.load(
@@ -169,7 +232,7 @@ def load_data(args):
     input_data['voxel_size'] = pickle.load(
         open(args.src_voxels, 'rb'))['voxel_size']
 
-    if args.network_cfg and args.network_ckpt and args.src_mesh:
+    if args.network_cfg and args.network_ckpt and args.icp:
         network_args = json.load(open(args.network_cfg, 'r'))
         network = ImplicitNet(**network_args['params'])
         load_model(args.network_ckpt, network)
@@ -184,43 +247,6 @@ def load_data(args):
     return input_data
 
 
-def compute_rigid_transform(
-        src_voxels: np.ndarray,
-        dst_voxels:  np.ndarray,
-        src_latents: np.ndarray,
-        dst_latents: np.ndarray,
-        voxel_size: float,
-        query_pts: np.ndarray = None,
-        network: torch.nn.Module = None,
-        num_iterations: int = -1,
-        centroids: np.ndarray = None,
-        rotations: np.ndarray = None
-):
-    src_pts = to_o3d_pcd(src_voxels)
-    dst_pts = to_o3d_pcd(dst_voxels)
-    src_features = to_o3d_feat(src_latents)
-    dst_features = to_o3d_feat(dst_latents)
-    result = execute_global_registration(
-        src_pts, dst_pts, src_features, dst_features, voxel_size*3)
-    transform = result.transformation
-
-    print(transform)
-
-    if has(network) and has(query_pts):
-        transform = run_icp_refine(
-            network, src_voxels, src_latents,
-            query_pts, voxel_size,
-            transform,
-            num_iterations=num_iterations,
-            centroids=centroids,
-            rotations=rotations,
-            use_gpu=True
-        )
-    print(transform)
-
-    return transform
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('src_voxels', type=str)
@@ -233,24 +259,51 @@ if __name__ == '__main__':
     parser.add_argument('--network-cfg', type=str, default=None)
     parser.add_argument('--network-ckpt', type=str, default=None)
     parser.add_argument('--orient', action='store_true')
+    parser.add_argument('--icp', action='store_true')
     parser.add_argument('--show', action='store_true')
     args = parser.parse_args()
 
     input_data = load_data(args)
-    transform = compute_rigid_transform(
-        **input_data,
-        num_iterations=args.num_iter)
+    matcher = LatentMatcher(**input_data)
+    coarse_result = matcher.compute_rigid_transform()
+    transform = coarse_result.transformation
+
+    if args.icp:
+        transform = matcher.refine_pose(
+            transform, args.num_iter, True)
 
     if has(args.src_mesh) and has(args.dst_mesh) and args.show:
         geometry = []
         src_mesh = o3d.io.read_triangle_mesh(args.src_mesh)
         src_mesh.compute_vertex_normals()
-        src_mesh.transform(transform)
-        src_mesh.paint_uniform_color([1, 0.5, 0])
+
+        if args.icp:
+            final_mesh = copy.deepcopy(src_mesh)
+            final_mesh.paint_uniform_color([0.5, 1, 0])
+            final_mesh.transform(transform)
+            geometry.append(final_mesh)
+
+        src_mesh.paint_uniform_color([0, 0.5, 1])
         geometry.append(src_mesh)
+
+        transformed_mesh = copy.deepcopy(src_mesh)
+        transformed_mesh.transform(transform)
+        transformed_mesh.paint_uniform_color([1, 0.5, 0])
+        geometry.append(transformed_mesh)
 
         dst_mesh = o3d.io.read_triangle_mesh(args.dst_mesh)
         dst_mesh.compute_vertex_normals()
         geometry.append(dst_mesh)
+
+        lines = np.asarray(coarse_result.correspondence_set)
+        src_pts = input_data['src_voxels']
+        dst_pts = input_data['dst_voxels']
+        src_pts = np.matmul(
+            src_pts, transform[:3, :3].transpose()) + transform[:3, 3]
+        points = np.concatenate([src_pts, dst_pts], axis=0)
+        lines[:, 1] += src_pts.shape[0]
+        matches = LineMesh(points, lines, colors=[1, 0.2, 0], radius=0.005)
+        matches_geoms = matches.cylinder_segments
+        geometry += [*matches_geoms]
 
         o3d.visualization.draw_geometries(geometry)

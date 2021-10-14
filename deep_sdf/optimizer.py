@@ -37,7 +37,7 @@ class LatentOptimizer(object):
                  batch_size=512,
                  clamp_dist=0.1,
                  gt_mesh=None,
-                 logger=None,
+                 log_dir=None,
                  output=None,
                  device=torch.device('cpu')) -> None:
         self.global_steps = 0
@@ -49,7 +49,7 @@ class LatentOptimizer(object):
         self.num_batch = (eval_data.shape[0]-1)//batch_size+1
         self.eval_data = torch.from_numpy(eval_data).to(device)
         self.network = network
-        self.logger = logger
+        self.logger = SummaryWriter(log_dir) if log_dir is not None else None
         self.output = output
         self.ckpt_freq = ckpt_freq
         self.clamp_dist = clamp_dist
@@ -91,10 +91,10 @@ class LatentOptimizer(object):
                 begin = batch_idx * self.batch_size
                 end = min(eval_data.shape[0], (batch_idx+1)*self.batch_size)
 
-                latent_ind = eval_data[begin:end, 0].to(device).int()
-                sdf_values = eval_data[begin:end, 4].to(device) * input_scale
-                points = eval_data[begin:end, 1:4].to(device) * input_scale
-                weights = eval_data[begin:end, 5].to(device)
+                latent_ind = eval_data[begin:end, 0].to(self.device).int()
+                sdf_values = eval_data[begin:end, 4].to(self.device) * input_scale
+                points = eval_data[begin:end, 1:4].to(self.device) * input_scale
+                weights = eval_data[begin:end, 5].to(self.device)
                 latents = torch.index_select(self.latent_vecs, 0, latent_ind)
 
                 if self.centroids is not None:
@@ -112,7 +112,7 @@ class LatentOptimizer(object):
                 points = torch.cat([latents, points], dim=-1)
                 surface_pred = self.network(points).squeeze()
 
-                if network.use_tanh:
+                if self.network.use_tanh:
                     sdf_values = torch.tanh(sdf_values)
 
                 if self.network.clamp:
