@@ -32,58 +32,56 @@ if __name__ == '__main__':
     parser.add_argument("--orient", action='store_true')
     args = parser.parse_args()
 
-    net_args = json.load(open(args.cfg, 'r'))
     device = torch.device('cuda:0' if (
         (not args.cpu) and torch.cuda.is_available()) else 'cpu')
-    splits = json.load(open(args.split, 'r'))['dirs']
-    for path in splits:
-        print('training {}'.format(path))
-        input_dir = os.path.join(args.input, path)
-        output_dir = os.path.join(args.output, path)
-        if os.path.exists(output_dir):
-            continue
-        os.makedirs(output_dir, exist_ok=True)
 
-        log_dir = os.path.join(output_dir, "logs")
-        net_args = json.load(open(args.cfg, 'r'))
-        network = ImplicitNet(**net_args['params']).to(device)
-        load_model(args.ckpt, network, device)
+    net_args = json.load(open(args.cfg, 'r'))
+    network = ImplicitNet(**net_args['params']).to(device)
+    load_model(args.ckpt, network, device)
 
-        eval_data = SampleDataset(
-            input_dir, args.orient, args.crop, training=True)
-        latent_optim = LatentOptimizer(
-            network,
-            eval_data.voxels,
-            eval_data.samples,
-            eval_data.num_latents,
-            args.latent_size,
-            eval_data.voxel_size,
-            eval_data.centroids,
-            eval_data.rotations,
-            args.init_lr,
-            args.ckpt_freq,
-            args.batch_size,
-            log_dir=log_dir,
-            output=output_dir,
-            device=device)
-
-        latent_optim.init_latents()
-        latent_optim(args.num_epochs)
-        filename = os.path.join(output_dir, "latent_vecs.npy")
-        latent_optim.save_latents(filename)
-
-        if args.recon:
-            recon = ShapeReconstructor(
+    splits = json.load(open(args.split, 'r'))
+    for scene_name, num_frag in splits.items():
+        for i in range(num_frag):
+            input_dir = os.path.join(args.input, scene_name, str(i))
+            output_dir = os.path.join(args.output, scene_name, str(i))
+            print('optimising latents {}'.format(input_dir))
+            os.makedirs(output_dir, exist_ok=True)
+            log_dir = os.path.join(output_dir, "logs")
+            eval_data = SampleDataset(
+                input_dir, args.orient, args.crop, training=True)
+            latent_optim = LatentOptimizer(
                 network,
-                latent_optim.latent_vecs,
                 eval_data.voxels,
+                eval_data.samples,
+                eval_data.num_latents,
+                args.latent_size,
                 eval_data.voxel_size,
-                centroids=eval_data.centroids,
-                rotations=eval_data.rotations,
-                surface_pts=eval_data.surface,
-                max_surface_dist=args.max_surf_dist,
-                device=device
-            )
-            recon = recon.reconstruct_interp()
-            if recon is not None:
-                recon.export(os.path.join(output_dir, "recon.ply"))
+                eval_data.centroids,
+                eval_data.rotations,
+                args.init_lr,
+                args.ckpt_freq,
+                args.batch_size,
+                log_dir=log_dir,
+                output=output_dir,
+                device=device)
+
+            latent_optim.init_latents()
+            latent_optim(args.num_epochs)
+            filename = os.path.join(output_dir, "latent_vecs.npy")
+            latent_optim.save_latents(filename)
+
+            if args.recon:
+                recon = ShapeReconstructor(
+                    network,
+                    latent_optim.latent_vecs,
+                    eval_data.voxels,
+                    eval_data.voxel_size,
+                    centroids=eval_data.centroids,
+                    rotations=eval_data.rotations,
+                    surface_pts=eval_data.surface,
+                    max_surface_dist=args.max_surf_dist,
+                    device=device
+                )
+                recon = recon.reconstruct_interp()
+                if recon is not None:
+                    recon.export(os.path.join(output_dir, "recon.ply"))

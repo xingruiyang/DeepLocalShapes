@@ -123,7 +123,7 @@ class LatentOptimizer(object):
 
                 sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
                 latent_loss = latents.abs().mean()
-                loss = sdf_loss + latent_loss * 1e-3
+                loss = sdf_loss + latent_loss * 1e-4
                 # gradient = compute_gradient(surface_pred, points)[
                 #     weights == 0, -3:]
                 # grad_loss = torch.abs(gradient.norm(dim=-1) - 1).mean()

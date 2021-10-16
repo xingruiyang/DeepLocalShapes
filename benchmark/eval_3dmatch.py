@@ -92,14 +92,13 @@ if __name__ == '__main__':
             rs_num += 1
             idx = mask[results_ind[i][0],  results_ind[i][1]]
             if idx != 0:
-                rel_pose = np.matmul(np.linalg.inv(
-                    gt_pose[idx]), results_pose[i])
-                # print(rel_pose)
+                rel_pose = np.matmul(
+                    gt_pose[idx], np.linalg.inv(results_pose[i]))
                 p = compute_transformation_error(rel_pose, gt_info[idx])
                 if p <= args.err2:
                     good += 1
-                else:
-                    print(results_ind[i])
+                # else:
+                #     print(results_ind[i])
 
     print(gt_num, rs_num)
     recall = good / gt_num

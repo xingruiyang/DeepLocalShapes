@@ -122,7 +122,7 @@ class NetworkTrainer(object):
 
                 sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
                 latent_loss = latents.abs().mean()
-                loss = sdf_loss + latent_loss * 1e-3
+                loss = sdf_loss + latent_loss * 1e-4
                 # gradient = compute_gradient(surface_pred, points)[weights==0, -3:]
                 # grad_loss = torch.abs(gradient.norm(dim=-1) - 1).mean()
                 # inter_loss = torch.exp(-1e2 * torch.abs(surface_pred[weights==0])).mean()
@@ -196,7 +196,6 @@ if __name__ == '__main__':
     parser.add_argument("--num-epochs", type=int, default=100)
     parser.add_argument("--latent-size", type=int, default=125)
     parser.add_argument("--init-lr", type=float, default=1e-3)
-    parser.add_argument("--clamp-dist", type=float, default=-1)
     parser.add_argument("--ckpt-freq", type=int, default=-1)
     parser.add_argument("--cpu", action='store_true')
     parser.add_argument("--orient", action='store_true')
@@ -231,7 +230,6 @@ if __name__ == '__main__':
         log_dir=log_dir,
         init_lr=args.init_lr,
         batch_size=args.batch_size,
-        clamp_dist=args.clamp_dist,
         centroids=dataset.centroids,
         rotations=dataset.rotations,
         gt_mesh=gt_mesh,

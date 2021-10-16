@@ -40,7 +40,7 @@ class MeshSampler(object):
         rotation = self.network(volumes, transpose_input=True)
         return rotation.squeeze().detach().numpy()
 
-    def sample_sdf(self, mesh, return_surface=False):
+    def sample_sdf(self, mesh, return_surface=False, preview=False):
         if self.normalize:
             mesh = mesh_to_sdf.scale_to_unit_sphere(mesh)
         surface_points = mesh_to_sdf.get_surface_point_cloud(
@@ -134,6 +134,7 @@ if __name__ == '__main__':
     parser.add_argument('--use-depth', action='store_true')
     parser.add_argument('--random-rot', action='store_true')
     parser.add_argument('--normalize', action='store_true')
+    parser.add_argument('--show', action='store_true')
     args = parser.parse_args()
 
     sampler = MeshSampler(
@@ -145,7 +146,7 @@ if __name__ == '__main__':
 
     mesh = trimesh.load(args.mesh)
 
-    samples = sampler.sample_sdf(mesh, return_surface=True)
+    samples = sampler.sample_sdf(mesh, return_surface=True, preview=args.show)
     samples, voxels, centroids, rotations, \
         surface, rand_surface, rand_sdf = samples
     surface_sdf = np.concatenate(

@@ -68,13 +68,13 @@ if __name__ == '__main__':
             src_data = load_data(
                 os.path.join(data_path, str(frag_idx)),
                 os.path.join(misc_path, str(frag_idx)),
-                args.orient, args.icp)
+                False, args.icp)
             for frag_idx2 in range(frag_idx+2, num_frags):
                 print("computing src {} and dst {}".format(frag_idx, frag_idx2))
                 dst_data = load_data(
                     os.path.join(data_path, str(frag_idx2)),
                     os.path.join(misc_path, str(frag_idx2)),
-                    False, False, 'dst')
+                    True, False, 'dst')
                 input_data = {**match_args, **src_data, **dst_data}
                 matcher = LatentMatcher(**input_data)
                 result = matcher.compute_rigid_transform()
