@@ -35,6 +35,8 @@ class ShapeReconstructor(object):
         self.resolution = resolution+1
         self.max_surface_dist = max_surface_dist
         self.surface_pts = surface_pts
+        self.voxel_step = .33333
+        self.input_scale = 1/(1.5*voxel_size)
         if surface_pts is not None:
             self.surface_pts = NearestNeighbors(
                 n_neighbors=1, metric='l2').fit(surface_pts)
@@ -50,7 +52,7 @@ class ShapeReconstructor(object):
         else:
             self.rotations = rotations
         self.grid_pts, self.xyz = self.get_grid_points(
-            self.resolution, range=[-.5, .5])
+            self.resolution, range=[-self.voxel_step, self.voxel_step])
         self.spacing = (
             self.xyz[0][2] - self.xyz[0][1],
             self.xyz[0][2] - self.xyz[0][1],
@@ -132,7 +134,7 @@ class ShapeReconstructor(object):
                     self.resolution, self.resolution, self.resolution) < self.max_surface_dist
 
             if self.centroids is not None:
-                voxel_grid -= self.centroids[latent_ind, :] / self.voxel_size
+                voxel_grid -= self.centroids[latent_ind, :] * self.input_scale
             if self.rotations is not None:
                 voxel_grid = torch.matmul(
                     voxel_grid, self.rotations[latent_ind, ...].transpose(0, 1))
@@ -153,8 +155,8 @@ class ShapeReconstructor(object):
                 surface = self.trace_surface_points(z, mask)
                 if surface is not None:
                     verts, faces, _, _ = surface
-                    verts -= .5
-                    verts *= self.voxel_size
+                    verts -= self.voxel_step
+                    verts *= 1.5*self.voxel_size
                     verts += self.voxels[latent_ind, :]
                     faces += num_exist_verts
                     mesh_verts.append(verts)
@@ -263,8 +265,8 @@ class ShapeReconstructor(object):
                 surface = self.trace_surface_points(z, z_mask)
                 if surface is not None:
                     verts, faces, _, _ = surface
-                    verts -= .5
-                    verts *= self.voxel_size
+                    verts -= self.voxel_step
+                    verts *= 1.5*self.voxel_size
                     verts += voxel
                     faces += num_exist_verts
                     mesh_verts.append(verts)
@@ -290,12 +292,13 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=str, default=None)
     parser.add_argument('--resolution', type=int, default=8)
     parser.add_argument('--latent-size', type=int, default=125)
-    parser.add_argument('--max-surf-dist', type=float, default=0.01)
+    parser.add_argument('--max-surf-dist', type=float, default=0.05)
     parser.add_argument('--cpu', action='store_true')
     parser.add_argument('--crop', action='store_true')
     parser.add_argument('--render', action='store_true')
     parser.add_argument('--orient', action='store_true')
     parser.add_argument('--show-surf', action='store_true')
+    parser.add_argument('--show-bbox', action='store_true')
     parser.add_argument('--no-interp', action='store_true')
     args = parser.parse_args()
 
@@ -307,7 +310,7 @@ if __name__ == '__main__':
     latent_vecs = load_latents(args.latents, device)
 
     dataset = SampleDataset(
-        args.data, args.orient, args.crop, training=False)
+        args.data, args.orient, args.crop or args.show_surf, training=False)
     reconstructor = ShapeReconstructor(
         network, latent_vecs, dataset.voxels,
         dataset.voxel_size, args.resolution,
@@ -328,4 +331,28 @@ if __name__ == '__main__':
             pcd = o3d.geometry.PointCloud()
             pcd.points = o3d.utility.Vector3dVector(dataset.surface)
             geometry += [pcd]
+        if args.show_bbox:
+            valid_voxels = []
+            if not args.crop:
+                vertices = recon_shape.vertices
+                for ind in range(dataset.voxels.shape[0]):
+                    voxel = dataset.voxels[ind, :]
+                    verts = vertices - voxel
+                    dist = np.linalg.norm(verts, ord=2, axis=-1)
+                    verts = vertices[dist < 1.5 * dataset.voxel_size, :]
+                    if verts.shape[0] <= 12:
+                        valid_voxels.append(False)
+                        continue
+                    dist = reconstructor.surface_pts.kneighbors(verts)[0]
+                    valid = np.count_nonzero(dist < 0.03) / verts.shape[0]
+                    valid_voxels.append(valid > 0.99)
+            print(np.count_nonzero(valid_voxels), dataset.voxels.shape[0])
+            for ind in range(dataset.voxels.shape[0]):
+                if valid_voxels[ind]:
+                    voxel = dataset.voxels[ind, :]
+                    bbox = o3d.geometry.AxisAlignedBoundingBox(
+                        min_bound=[-.5*dataset.voxel_size]*3 + voxel,
+                        max_bound=[.5*dataset.voxel_size]*3 + voxel)
+                    geometry += [bbox]
+
         o3d.visualization.draw_geometries(geometry)

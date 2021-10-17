@@ -19,6 +19,7 @@ if __name__ == '__main__':
     parser.add_argument("ckpt", type=str)
     parser.add_argument("input", type=str)
     parser.add_argument("output", type=str)
+    parser.add_argument("--skip", type=int, default=0)
     parser.add_argument("--batch-size", type=int, default=10000)
     parser.add_argument("--num-epochs", type=int, default=100)
     parser.add_argument("--latent-size", type=int, default=125)
@@ -42,6 +43,8 @@ if __name__ == '__main__':
     splits = json.load(open(args.split, 'r'))
     for scene_name, num_frag in splits.items():
         for i in range(num_frag):
+            if args.skip != 0 and i < args.skip:
+                continue
             input_dir = os.path.join(args.input, scene_name, str(i))
             output_dir = os.path.join(args.output, scene_name, str(i))
             print('optimising latents {}'.format(input_dir))

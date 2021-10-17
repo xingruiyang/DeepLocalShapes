@@ -39,7 +39,7 @@ def execute_global_registration(
         dst_pts,
         src_features,
         dst_features,
-        True,
+        False,
         distance_threshold,
         o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
         3,
@@ -50,6 +50,10 @@ def execute_global_registration(
                 distance_threshold)
         ],
         o3d.pipelines.registration.RANSACConvergenceCriteria(1000000, 0.999))
+    # result = o3d.pipelines.registration.registration_fast_based_on_feature_matching(
+    #     src_pts, dst_pts, src_features, dst_features,
+    #     o3d.pipelines.registration.FastGlobalRegistrationOption(
+    #         maximum_correspondence_distance=distance_threshold))
     return result
 
 
@@ -176,7 +180,7 @@ class LatentMatcher(object):
             network: torch.nn.Module = None,
             centroids: np.ndarray = None,
             rotations: np.ndarray = None,
-            distance_threshold=3) -> None:
+            distance_threshold=1) -> None:
         super().__init__()
         self.src_voxels = src_voxels
         self.dst_voxels = dst_voxels
@@ -268,6 +272,7 @@ if __name__ == '__main__':
     matcher = LatentMatcher(**input_data)
     coarse_result = matcher.compute_rigid_transform()
     transform = coarse_result.transformation
+    print(coarse_result.correspondence_set)
     final_transform = transform
 
     if args.icp:
@@ -300,15 +305,15 @@ if __name__ == '__main__':
         dst_mesh.compute_vertex_normals()
         geometry.append(dst_mesh)
 
-        # lines = np.asarray(coarse_result.correspondence_set)
-        # src_pts = input_data['src_voxels']
-        # dst_pts = input_data['dst_voxels']
-        # src_pts = np.matmul(
-        #     src_pts, transform[:3, :3].transpose()) + transform[:3, 3]
-        # points = np.concatenate([src_pts, dst_pts], axis=0)
-        # lines[:, 1] += src_pts.shape[0]
-        # matches = LineMesh(points, lines, colors=[1, 0.2, 0], radius=0.005)
-        # matches_geoms = matches.cylinder_segments
-        # geometry += [*matches_geoms]
+        lines = np.asarray(coarse_result.correspondence_set)
+        src_pts = input_data['src_voxels']
+        dst_pts = input_data['dst_voxels']
+        src_pts = np.matmul(
+            src_pts, transform[:3, :3].transpose()) + transform[:3, 3]
+        points = np.concatenate([src_pts, dst_pts], axis=0)
+        lines[:, 1] += src_pts.shape[0]
+        matches = LineMesh(points, lines, colors=[1, 0.2, 0], radius=0.005)
+        matches_geoms = matches.cylinder_segments
+        geometry += [*matches_geoms]
 
         o3d.visualization.draw_geometries(geometry)

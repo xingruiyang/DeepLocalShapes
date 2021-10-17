@@ -79,7 +79,7 @@ class NetworkTrainer(object):
 
     def train(self, num_epochs):
         self.global_steps = 0
-        input_scale = 1.0 / self.voxel_size
+        input_scale = 1.0 / (1.5*self.voxel_size)
         for n_iter in range(num_epochs):
             self.network.train()
             batch_loss = 0
@@ -98,6 +98,7 @@ class NetworkTrainer(object):
                     self.device) * input_scale
                 weights = train_data[begin:end, 5].to(self.device)
                 latents = torch.index_select(self.latent_vecs, 0, latent_ind)
+                # print(torch.min(points[weights!=0, :]), torch.max(points[weights!=0, :]))
 
                 if self.centroids is not None:
                     centre = torch.index_select(self.centroids, 0, latent_ind)
@@ -126,7 +127,7 @@ class NetworkTrainer(object):
                 # gradient = compute_gradient(surface_pred, points)[weights==0, -3:]
                 # grad_loss = torch.abs(gradient.norm(dim=-1) - 1).mean()
                 # inter_loss = torch.exp(-1e2 * torch.abs(surface_pred[weights==0])).mean()
-                # loss = sdf_loss + latent_loss * 1e-3 + 1e-1 * grad_loss #+ 1e-2 * inter_loss
+                # loss = sdf_loss + latent_loss * 1e-4 + 1e-1 * grad_loss #+ 1e-2 * inter_loss
 
                 self.optimizer.zero_grad()
                 loss.backward()
