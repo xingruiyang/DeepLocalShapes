@@ -12,7 +12,7 @@ from dataset import SampleDataset
 from losses import chamfer_distance
 from network import ImplicitNet
 from reconstruct import ShapeReconstructor
-from utils import log_progress, save_ckpts, save_latest
+from utils import load_model, log_progress, save_ckpts, save_latest
 
 
 def compute_gradient(y, x, grad_outputs=None):
@@ -75,7 +75,7 @@ class NetworkTrainer(object):
 
         self.optimizer = Adam(
             [{'params': network.parameters(), 'lr': init_lr},
-             {'params': self.latent_vecs, 'lr': init_lr}])
+             {'params': self.latent_vecs, 'lr': init_lr*0.5}])
 
     def train(self, num_epochs):
         self.global_steps = 0
@@ -98,7 +98,6 @@ class NetworkTrainer(object):
                     self.device) * input_scale
                 weights = train_data[begin:end, 5].to(self.device)
                 latents = torch.index_select(self.latent_vecs, 0, latent_ind)
-                # print(torch.min(points[weights!=0, :]), torch.max(points[weights!=0, :]))
 
                 if self.centroids is not None:
                     centre = torch.index_select(self.centroids, 0, latent_ind)
@@ -123,7 +122,7 @@ class NetworkTrainer(object):
 
                 sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
                 latent_loss = latents.abs().mean()
-                loss = sdf_loss + latent_loss * 1e-4
+                loss = sdf_loss + latent_loss * 1e-2
                 # gradient = compute_gradient(surface_pred, points)[weights==0, -3:]
                 # grad_loss = torch.abs(gradient.norm(dim=-1) - 1).mean()
                 # inter_loss = torch.exp(-1e2 * torch.abs(surface_pred[weights==0])).mean()
@@ -162,24 +161,24 @@ class NetworkTrainer(object):
     def save_ckpt(self, epoch=0):
         print("saving ckpt for epoch {}".format(epoch))
         shape = None
-        if self.logger is not None:
-            with torch.no_grad():
-                self.network.eval()
-                reconstructor = ShapeReconstructor(
-                    self.network,
-                    self.latent_vecs,
-                    self.voxels,
-                    self.voxel_size,
-                    resolution=16,
-                    centroids=self.centroids,
-                    rotations=self.rotations,
-                    device=self.device)
-                shape = reconstructor.reconstruct_interp()
-                if self.gt_points is not None and shape is not None:
-                    recon_points = shape.sample(self.num_samples)
-                    dist = chamfer_distance(
-                        self.gt_points, recon_points, direction='bi')
-                    self.logger.add_scalar("train/chamfer_dist", dist, epoch)
+        # if self.logger is not None:
+        #     with torch.no_grad():
+        #         self.network.eval()
+        #         reconstructor = ShapeReconstructor(
+        #             self.network,
+        #             self.latent_vecs,
+        #             self.voxels,
+        #             self.voxel_size,
+        #             resolution=16,
+        #             centroids=self.centroids,
+        #             rotations=self.rotations,
+        #             device=self.device)
+        #         shape = reconstructor.reconstruct_interp()
+        #         if self.gt_points is not None and shape is not None:
+        #             recon_points = shape.sample(self.num_samples)
+        #             dist = chamfer_distance(
+        #                 self.gt_points, recon_points, direction='bi')
+        #             self.logger.add_scalar("train/chamfer_dist", dist, epoch)
         save_ckpts(self.output, self.network,
                    self.optimizer,
                    self.latent_vecs,
@@ -192,6 +191,7 @@ if __name__ == '__main__':
     parser.add_argument("data", type=str)
     parser.add_argument("output", type=str)
     parser.add_argument("--log-dir", type=str, default=None)
+    parser.add_argument("--load", type=str, default=None)
     parser.add_argument("--gt-mesh", type=str, default=None)
     parser.add_argument("--batch-size", type=int, default=10000)
     parser.add_argument("--num-epochs", type=int, default=100)
@@ -212,10 +212,15 @@ if __name__ == '__main__':
     device = torch.device('cuda:0' if (
         (not args.cpu) and torch.cuda.is_available()) else 'cpu')
     net_args = json.load(open(args.cfg, 'r'))
-    network = ImplicitNet(**net_args['params']).to(device)
+    net_params = net_args['params']
+    network = ImplicitNet(**net_params).to(device)
+
+    if args.load:
+        print("load model from {}".format(args.load))
+        load_model(args.load, network, device)
 
     dataset = SampleDataset(args.data, args.orient, training=True)
-    latent_vecs = torch.zeros((dataset.num_latents, args.latent_size))
+    latent_vecs = torch.zeros((dataset.num_latents, net_params['latent_dim']))
     latent_vecs = latent_vecs.to(device)
     torch.nn.init.normal_(latent_vecs, 0, 0.01**2)
     latent_vecs.requires_grad_()

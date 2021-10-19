@@ -42,7 +42,7 @@ def execute_global_registration(
         False,
         distance_threshold,
         o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
-        3,
+        4,
         [
             o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(
                 0.9),
@@ -180,7 +180,7 @@ class LatentMatcher(object):
             network: torch.nn.Module = None,
             centroids: np.ndarray = None,
             rotations: np.ndarray = None,
-            distance_threshold=1) -> None:
+            distance_threshold=0.15) -> None:
         super().__init__()
         self.src_voxels = src_voxels
         self.dst_voxels = dst_voxels
@@ -195,7 +195,8 @@ class LatentMatcher(object):
         self.rotations = rotations
         self.network = network
         self.query_pts = query_pts
-        self.distance_threshold = distance_threshold * voxel_size
+        self.distance_threshold = distance_threshold
+        # self.distance_threshold = distance_threshold * voxel_size
 
     def compute_rigid_transform(self):
         result = execute_global_registration(
@@ -261,6 +262,7 @@ if __name__ == '__main__':
     parser.add_argument('--num-iter', type=int, default=10)
     parser.add_argument('--src-mesh', type=str, default=None)
     parser.add_argument('--dst-mesh', type=str, default=None)
+    parser.add_argument('--dist-th', type=float, default=0.1)
     parser.add_argument('--network-cfg', type=str, default=None)
     parser.add_argument('--network-ckpt', type=str, default=None)
     parser.add_argument('--orient', action='store_true')
@@ -269,6 +271,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     input_data = load_data(args)
+    input_data['distance_threshold'] = args.dist_th
     matcher = LatentMatcher(**input_data)
     coarse_result = matcher.compute_rigid_transform()
     transform = coarse_result.transformation

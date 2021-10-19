@@ -9,6 +9,49 @@ import torch
 import trimesh
 
 
+def toldi_compute_xyz(surf, centroid):
+    pcd = surf - centroid
+    dist = np.linalg.norm(pcd, ord=2, axis=-1)
+    dist_ind = dist.argsort()
+    pcd = pcd[dist_ind, :]
+    dist = dist[dist_ind]
+
+    cov_mat = np.matmul(pcd.transpose(), pcd)
+    _, eig_vecs = np.linalg.eigh(cov_mat)
+    z_axis = eig_vecs[:, 0]
+    z_sign = 0.0
+    for i in range(pcd.shape[0]):
+        vec_x = 0-pcd[i, 0]
+        vec_y = 0-pcd[i, 1]
+        vec_z = 0-pcd[i, 2]
+        sign = (vec_x * z_axis[0] + vec_y * z_axis[1] + vec_z * z_axis[2])
+        z_sign += sign
+    if z_sign < 0:
+        z_axis *= -1
+    z_proj = np.dot(pcd, z_axis)
+    sign_weight = z_proj**2
+    sign_weight[z_proj < 0] *= -1
+
+    vec_proj = np.zeros((pcd.shape[0], 3))
+    for i in range(pcd.shape[0]):
+        vec_proj[i, 0] = pcd[i, 0] - z_proj[i] * z_axis[0]
+        vec_proj[i, 1] = pcd[i, 1] - z_proj[i] * z_axis[1]
+        vec_proj[i, 2] = pcd[i, 2] - z_proj[i] * z_axis[2]
+
+    supp = np.max(dist)
+    dist_weight = (supp - dist)**2
+    x_axis = dist_weight[:, None] * sign_weight[:, None] * vec_proj
+    x_axis = np.sum(x_axis, axis=0)
+    x_norm = np.linalg.norm(x_axis, ord=2)
+    if x_norm == 0:
+        return None
+    x_axis /= x_norm
+
+    y_axis = np.cross(z_axis, x_axis)
+    rotation = np.stack([x_axis, y_axis, z_axis], axis=0)
+    return rotation
+
+
 class Voxelizer(object):
     def __init__(self, pcd_path) -> None:
         super().__init__()
@@ -34,7 +77,7 @@ class Voxelizer(object):
         voxels *= voxel_size
         print("{} voxels to be sampled".format(voxels.shape[0]))
 
-        max_num_pcd = 2**14
+        max_num_pcd = 2**12
         samples = []
         centroids = []
         rotations = []
@@ -48,35 +91,61 @@ class Voxelizer(object):
             pcd = pcd[selector, :]
             sdf = sdfs[selector]
 
-            if pcd.shape[0] > max_num_pcd:
-                rand_sel = torch.randperm(pcd.shape[0])[:max_num_pcd]
-                pcd = pcd[rand_sel, :]
-                sdf = sdf[rand_sel]
+            pos_sel = sdf > 0
+            neg_sel = sdf < 0
+            neg_pcd = pcd[neg_sel, :]
+            pos_pcd = pcd[pos_sel, :]
+            neg_sdf = sdf[neg_sel]
+            pos_sdf = sdf[pos_sel]
+
+            if pos_pcd.shape[0] > max_num_pcd:
+                rand_sel = torch.randperm(pos_pcd.shape[0])[:max_num_pcd]
+                pos_pcd = pos_pcd[rand_sel, :]
+                pos_sdf = pos_sdf[rand_sel]
+
+            if neg_pcd.shape[0] > max_num_pcd:
+                rand_sel = torch.randperm(neg_pcd.shape[0])[:max_num_pcd]
+                neg_pcd = neg_pcd[rand_sel, :]
+                neg_sdf = neg_sdf[rand_sel]
 
             surf = surface - voxel
             dist = torch.norm(surf, p=np.inf, dim=-1)
             selector = dist < (1.5 * voxel_size)
             surf = surf[selector, :]
             if surf.shape[0] >= max_num_pcd:
-                rand_sel = torch.randperm(pcd.shape[0])[:max_num_pcd]
+                rand_sel = torch.randperm(surf.shape[0])[:max_num_pcd]
                 surf = surf[rand_sel, :]
+
+            centroid = torch.mean(surf, dim=0).detach().cpu().numpy()
+            rotation = np.eye(3)
+
+            if surf.shape[0] > 10:
+                rotation = toldi_compute_xyz(
+                    surf.detach().cpu().numpy(), centroid)
+                if rotation is None:
+                    rotation = np.eye(3)
 
             # global_pts = (torch.randn((256, 3)) * 3 - 1.5) * voxel_size
             # global_sdf = torch.ones((256, )) * -1
             # global_weight = torch.zeros((256, ))
 
             sample_pts = torch.cat([
-                pcd,
+                pos_pcd,
+                neg_pcd
                 # global_pts.cuda()
-            ], axis=0)
+            ], dim=0)
             sample_sdf = torch.cat([
-                sdf,
+                pos_sdf,
+                neg_sdf
                 # global_sdf.cuda()
-            ], axis=0)
+            ], dim=0)
+
             sample_weights = torch.cat([
-                torch.ones_like(sdf),
+                torch.ones_like(pos_sdf),
+                torch.ones_like(neg_sdf)
                 # global_weight.cuda()
-            ], axis=0)
+            ], dim=0)
+            
 
             # self.display_sdf(sample_pts.detach().cpu(),
             #                  sample_sdf.detach().cpu())
@@ -88,8 +157,8 @@ class Voxelizer(object):
             sample[:, 5] = sample_weights.detach().cpu().numpy()
             samples.append(sample)
             surf_pts.append(surf.detach().cpu().numpy())
-            centroids.append(np.zeros(3,))
-            rotations.append(np.eye(3))
+            centroids.append(centroid)
+            rotations.append(rotation)
 
         samples = np.concatenate(samples, axis=0)
         surf_pts = np.concatenate(surf_pts, axis=0)
@@ -107,7 +176,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('in_dir', type=str)
     parser.add_argument('output', type=str)
-    parser.add_argument('--num-shapes', type=int, default=50)
+    parser.add_argument('--num-shapes', type=int, default=100)
     parser.add_argument('--voxel-size', type=float, default=0.1)
     args = parser.parse_args()
 
@@ -138,7 +207,7 @@ if __name__ == '__main__':
 
         samples[:, 0] += num_total_voxels
         all_samples.append(samples)
-        all_voxels.append(voxels+np.array([x, y, 0])*1.5)
+        all_voxels.append(voxels+np.array([x, y, 0])*3)
         all_surface.append(surface)
         all_centroids.append(centroids)
         all_rotations.append(rotations)

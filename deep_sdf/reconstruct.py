@@ -100,7 +100,7 @@ class ShapeReconstructor(object):
             z0 = grid_sdf[voxel[0] * (self.resolution-1):(voxel[0] + 1) * self.resolution - voxel[0],
                           voxel[1] * (self.resolution-1):(voxel[1] + 1) * self.resolution - voxel[1],
                           voxel[2] * (self.resolution-1):(voxel[2] + 1) * self.resolution - voxel[2]]
-            z = np.minimum(z0, z)
+            # z = np.minimum(z0, z)
             grid_sdf[voxel[0] * (self.resolution-1):(voxel[0] + 1) * self.resolution - voxel[0],
                      voxel[1] * (self.resolution-1):(voxel[1] + 1) * self.resolution - voxel[1],
                      voxel[2] * (self.resolution-1):(voxel[2] + 1) * self.resolution - voxel[2]] = z
@@ -129,7 +129,7 @@ class ShapeReconstructor(object):
             if self.surface_pts is not None:
                 voxel = self.voxels[latent_ind, :]
                 z_mask = self.surface_pts.kneighbors(
-                    (voxel_grid.detach().cpu().numpy()) * self.voxel_size + voxel)[0]
+                    (voxel_grid.detach().cpu().numpy()) * 1.5 * self.voxel_size + voxel)[0]
                 z_mask = z_mask.reshape(
                     self.resolution, self.resolution, self.resolution) < self.max_surface_dist
 
@@ -244,13 +244,13 @@ class ShapeReconstructor(object):
             z_mask = None
             if self.surface_pts is not None:
                 z_mask = self.surface_pts.kneighbors(
-                    (voxel_grid.detach().cpu().numpy()) * self.voxel_size+voxel)[0]
+                    (voxel_grid.detach().cpu().numpy()) * 1.5 * self.voxel_size+voxel)[0]
                 z_mask = z_mask.reshape(
                     self.resolution, self.resolution, self.resolution) < self.max_surface_dist
 
             if self.centroids is not None:
                 centroid = self.centroids[latent_ind, :]
-                voxel_grid -= (centroid / self.voxel_size)
+                voxel_grid -= (centroid  * self.input_scale)
             if self.rotations is not None:
                 rotation = self.rotations[latent_ind, ...]
                 voxel_grid = torch.matmul(voxel_grid, rotation.transpose(0, 1))

@@ -79,7 +79,7 @@ class LatentOptimizer(object):
     def __call__(self, num_epochs):
         self.network.train()
         self.global_steps = 0
-        input_scale = 1.0 / self.voxel_size
+        input_scale = 1.0 / (1.5*self.voxel_size)
         for n_iter in range(num_epochs):
             batch_loss = 0
             batch_sdf_loss = 0
@@ -121,13 +121,14 @@ class LatentOptimizer(object):
                     sdf_values = torch.clamp(
                         sdf_values, -self.network.clamp_dist, self.network.clamp_dist)
 
+                # weights = 1.0 / points[:, -1]
                 sdf_loss = (((sdf_values-surface_pred)*weights).abs()).mean()
                 latent_loss = latents.abs().mean()
-                # loss = sdf_loss + latent_loss * 1e-4
-                gradient = compute_gradient(surface_pred, points)[weights == 0, -3:]
-                grad_loss = torch.abs(gradient.norm(dim=-1) - 1).mean()
+                loss = sdf_loss + latent_loss * 1e-4
+                # gradient = compute_gradient(surface_pred, points)[weights == 0, -3:]
+                # grad_loss = torch.abs(gradient.norm(dim=-1) - 1).mean()
                 # inter_loss = torch.exp(-1e2 * torch.abs(surface_pred[weights==0])).mean()
-                loss = sdf_loss + latent_loss * 1e-3 + 1e-1 * grad_loss
+                # loss = sdf_loss + latent_loss * 1e-3 + 1e-1 * grad_loss
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -222,7 +223,7 @@ if __name__ == '__main__':
 
     eval_data = SampleDataset(
         args.data, args.orient, training=True)
-    logger = SummaryWriter(os.path.join(args.output, 'logs/'))
+    # logger = SummaryWriter(os.path.join(args.output, 'logs/'))
     latent_optim = LatentOptimizer(
         network,
         eval_data.voxels,
@@ -237,7 +238,7 @@ if __name__ == '__main__':
         args.batch_size,
         args.clamp_dist,
         gt_mesh=gt_mesh,
-        logger=logger,
+        log_dir=os.path.join(args.output, 'logs/'),
         output=args.output,
         device=device)
 

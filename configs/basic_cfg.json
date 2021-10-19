@@ -1,6 +1,6 @@
 {
     "params": {
-        "latent_dim": 125,
+        "latent_dim": 64,
         "hidden_dims": [
             128,
             128,

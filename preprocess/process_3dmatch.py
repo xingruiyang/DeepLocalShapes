@@ -50,14 +50,14 @@ if __name__ == '__main__':
         scene_path = os.path.join(args.path, scene_name)
         print("processing {}".format(scene_path))
         seq_list = [f for f in os.listdir(
-            scene_path) if os.path.isdir(os.path.join(scene_path, f))]
+            scene_path) if os.path.isdir(os.path.join(scene_path, f)) and f != 'alt']
         seq_list = natsort.natsorted(seq_list)
         intr_path = os.path.join(scene_path, 'camera-intrinsics.txt')
         intr = np.loadtxt(intr_path)
 
         frag_idx = 0
         for seq_id in range(min(len(seq_list), 3)):
-            print("processing seq {}".format(seq_id))
+            print("processing seq {}".format(seq_list[seq_id]))
             seq_name = seq_list[seq_id]
             depth_imgs = glob.glob(os.path.join(
                 scene_path, seq_name, "*.depth.png"))
