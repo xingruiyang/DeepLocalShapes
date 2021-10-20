@@ -20,24 +20,24 @@ def get_voxels(surface_pts, voxel_size=0.15):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('pcd')
+    parser.add_argument('--voxel_size', type=float, default=0.1)
     args = parser.parse_args()
     num_voxels = 1000
     pcd = np.load(args.pcd)
     samples = pcd[np.random.permutation(pcd.shape[0])[:num_voxels], :]
-    voxel_size = 0.1
     surface_pts = to_o3d(pcd)
     geometries = []
-    voxels = get_voxels(pcd, voxel_size)
+    voxels = get_voxels(pcd, args.voxel_size)
     kdtree = KDTree(pcd)
-    dist, ind = kdtree.query(voxels)
-    voxels=pcd[ind,:].astype(float).squeeze()
-    num_voxels=voxels.shape[0]
+    # dist, ind = kdtree.query(voxels)
+    # voxels=pcd[ind,:].astype(float).squeeze()
+    # num_voxels=voxels.shape[0]
 
     for i in range(num_voxels):
-        voxel = voxels[i, :]
+        voxel = samples[i, :]
         bbox_inner = o3d.geometry.AxisAlignedBoundingBox(
-            -np.ones((3, )) * .5 * voxel_size + voxel,
-            np.ones((3, )) * .5 * voxel_size + voxel
+            -np.ones((3, )) * 1.5 * args.voxel_size + voxel,
+            np.ones((3, )) * 1.5 * args.voxel_size + voxel
         )
         # bbox_outter = o3d.geometry.AxisAlignedBoundingBox(
         #     -np.ones((3, )) * 1.5 * voxel_size + voxel,

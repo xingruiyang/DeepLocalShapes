@@ -1,3 +1,4 @@
+import json
 import inspect
 import math
 import os
@@ -5,6 +6,8 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from deep_sdf.utils import load_model
 
 activations = {
     "leaky_relu": nn.LeakyReLU(negative_slope=0.01),
@@ -109,12 +112,9 @@ class ImplicitNet(nn.Module):
         torch.save(model_state_dict, filename)
 
     @staticmethod
-    def load_from_ckpt(cls, filename, device=torch.device('cpu')):
-        if not os.path.isfile(filename):
-            raise Exception(
-                'model state dict "{}" does not exist'.format(filename))
-
-        state_dict = torch.load(filename, map_location=device)
-        network = ImplicitNet(**state_dict['hparams']).to(device)
-        network.load_state_dict(state_dict["model_state_dict"])
-        return network, state_dict["epochs"]
+    def create_from_cfg(cfg, ckpt=None, device=torch.device('cpu')):
+        net_args = json.load(open(cfg, 'r'))
+        network = ImplicitNet(**net_args['params']).to(device)
+        if ckpt is not None:
+            load_model(ckpt, network, device)
+        return network

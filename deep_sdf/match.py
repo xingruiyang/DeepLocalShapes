@@ -45,11 +45,11 @@ def execute_global_registration(
         4,
         [
             o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(
-                0.9),
+                0.),
             o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(
                 distance_threshold)
         ],
-        o3d.pipelines.registration.RANSACConvergenceCriteria(1000000, 0.999))
+        o3d.pipelines.registration.RANSACConvergenceCriteria(4000000, 500))
     # result = o3d.pipelines.registration.registration_fast_based_on_feature_matching(
     #     src_pts, dst_pts, src_features, dst_features,
     #     o3d.pipelines.registration.FastGlobalRegistrationOption(

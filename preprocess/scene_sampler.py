@@ -249,20 +249,20 @@ class DepthSampler():
                 normal, pose[:3, :3].transpose())
             pcd = np.matmul(
                 pcd, pose[:3, :3].transpose()) + pose[:3, 3]
-            rand_pts = 0.985-(np.random.rand(rays.shape[0], 1)*0.4)
+            rand_pts = 0.99-(np.random.rand(rays.shape[0], 1)*0.4)
             rand_pts = rays * rand_pts * depth
             rand_pts = np.matmul(
                 rand_pts, pose[:3, :3].transpose()) + pose[:3, 3]
 
             weight = 1.0 / depth
-            randpick = np.random.permutation(rand_pts.shape[0])[
-                :rand_pts.shape[0]//8]
-            rand_pts = rand_pts[randpick, :]
-            rand_weight = weight[randpick, :]
+            # randpick = np.random.permutation(rand_pts.shape[0])[
+            #     :rand_pts.shape[0]//8]
+            # rand_pts = rand_pts[randpick, :]
+            # rand_weight = weight[randpick, :]
 
             free_space_samples.append(rand_pts)
             point_weights.append(weight)
-            rand_weights.append(rand_weight)
+            rand_weights.append(weight)
             surface_points.append(pcd)
             surface_normals.append(normal)
         point_weights = np.concatenate(point_weights, axis=0)

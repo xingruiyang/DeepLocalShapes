@@ -65,6 +65,9 @@ if __name__ == '__main__':
             frame_selector = get_frame_selector(
                 scene_name, len(depth_imgs), args.frames_per_frag)
             for ind in frame_selector:
+                # if frag_idx != 0 and frag_idx != 3:
+                #     frag_idx += 1
+                #     continue
                 sampler = DepthSampler(
                     scene_path,
                     seq_name,

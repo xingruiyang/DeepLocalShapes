@@ -47,7 +47,7 @@ class LatentOptimizer(object):
         self.device = device
         self.batch_size = batch_size
         self.num_batch = (eval_data.shape[0]-1)//batch_size+1
-        self.eval_data = torch.from_numpy(eval_data).to(device)
+        self.eval_data = torch.from_numpy(eval_data)#.to(device)
         self.network = network
         self.logger = SummaryWriter(log_dir) if log_dir is not None else None
         self.output = output
@@ -218,7 +218,8 @@ if __name__ == '__main__':
     device = torch.device('cuda:0' if (
         (not args.cpu) and torch.cuda.is_available()) else 'cpu')
     net_args = json.load(open(args.cfg, 'r'))
-    network = ImplicitNet(**net_args['params']).to(device)
+    net_params = net_args['params']
+    network = ImplicitNet(**net_params).to(device)
     load_model(args.ckpt, network, device)
 
     eval_data = SampleDataset(
@@ -229,7 +230,7 @@ if __name__ == '__main__':
         eval_data.voxels,
         eval_data.samples,
         eval_data.num_latents,
-        args.latent_size,
+        net_params['latent_dim'],
         eval_data.voxel_size,
         eval_data.centroids,
         eval_data.rotations,

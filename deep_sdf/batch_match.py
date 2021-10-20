@@ -41,6 +41,7 @@ if __name__ == '__main__':
     parser.add_argument('split', type=str)
     parser.add_argument('output', type=str)
     parser.add_argument('--num-iter', type=int, default=10)
+    parser.add_argument('--dist-th', type=float, default=0.1)
     parser.add_argument('--network-cfg', type=str, default=None)
     parser.add_argument('--network-ckpt', type=str, default=None)
     parser.add_argument('--orient', action='store_true')
@@ -52,6 +53,7 @@ if __name__ == '__main__':
         (not args.cpu) and torch.cuda.is_available()) else 'cpu')
 
     match_args = dict()
+    match_args['distance_threshold']= args.dist_th
     if args.icp and args.network_cfg is not None:
         network_args = json.load(open(args.network_cfg, 'r'))
         network = ImplicitNet(**network_args['params'])
