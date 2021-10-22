@@ -12,12 +12,20 @@ import pickle
 import numpy as np
 
 
+def normalize_latents(latents):
+    norm = np.linalg.norm(latents, ord=2, axis=-1, keepdims=True)
+    norm[norm == 0] == 1
+    return latents / norm
+
+
 def load_data(data_path, misc_path, load_orient=False, load_mesh=False, prefix='src'):
     input_data = dict()
     input_data[prefix+'_voxels'] = pickle.load(
         open(os.path.join(data_path, 'samples.pkl'), 'rb'))['voxels']
     input_data[prefix +
                '_latents'] = np.load(os.path.join(misc_path, 'latent_vecs.npy'))
+    input_data[prefix +
+               '_latents'] = normalize_latents(input_data[prefix + '_latents'])
     input_data['voxel_size'] = pickle.load(
         open(os.path.join(data_path, 'samples.pkl'), 'rb'))['voxel_size']
 
@@ -53,7 +61,7 @@ if __name__ == '__main__':
         (not args.cpu) and torch.cuda.is_available()) else 'cpu')
 
     match_args = dict()
-    match_args['distance_threshold']= args.dist_th
+    match_args['distance_threshold'] = args.dist_th
     if args.icp and args.network_cfg is not None:
         network_args = json.load(open(args.network_cfg, 'r'))
         network = ImplicitNet(**network_args['params'])

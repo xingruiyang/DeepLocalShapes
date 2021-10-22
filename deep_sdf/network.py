@@ -1,13 +1,9 @@
 import json
-import inspect
 import math
-import os
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from deep_sdf.utils import load_model
 
 activations = {
     "leaky_relu": nn.LeakyReLU(negative_slope=0.01),
@@ -116,5 +112,6 @@ class ImplicitNet(nn.Module):
         net_args = json.load(open(cfg, 'r'))
         network = ImplicitNet(**net_args['params']).to(device)
         if ckpt is not None:
-            load_model(ckpt, network, device)
+            data = torch.load(ckpt, map_location=device)
+            network.load_state_dict(data["model_state_dict"])
         return network

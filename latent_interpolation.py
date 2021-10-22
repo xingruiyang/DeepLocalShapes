@@ -148,18 +148,18 @@ if __name__ == '__main__':
     start_latent = scene.get_latent_vec(choices[0])
     end_latent = scene.get_latent_vec(choices[1])
     latent_inc = (end_latent - start_latent)/num_interp
-
+    print('distance: {}'.format(np.linalg.norm(end_latent - start_latent, ord=2)))
     geometries = []
     for i in range(num_interp):
         mesh = scene.get_mesh_from_latent(
             start_latent+latent_inc * i,
-            canonical=False, range=[-.33, .33])
+            canonical=False, range=[-.1, .1])
         if has(mesh):
             y = i // num_per_row
             x = i - num_per_row * y
 
             mesh = trimesh.Trimesh(mesh[0]*dataset.voxel_size, mesh[1])
-            mesh.apply_translation(np.array([y*3,x*3, 0]))
+            mesh.apply_translation(np.array([y*3, x*3, 0]))
             mesh = mesh.as_open3d
             mesh.compute_vertex_normals()
             geometries.append(mesh)

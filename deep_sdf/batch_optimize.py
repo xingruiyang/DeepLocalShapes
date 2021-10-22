@@ -45,8 +45,8 @@ if __name__ == '__main__':
         for i in range(num_frag):
             # if i != 0 and i != 3:
             #     continue
-            # if args.skip != 0 and i < args.skip:
-            #     continue
+            if args.skip != 0 and i < args.skip:
+                continue
             input_dir = os.path.join(args.input, scene_name, str(i))
             output_dir = os.path.join(args.output, scene_name, str(i))
             print('optimising latents {}'.format(input_dir))

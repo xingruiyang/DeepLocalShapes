@@ -39,7 +39,7 @@ def execute_global_registration(
         dst_pts,
         src_features,
         dst_features,
-        False,
+        True,
         distance_threshold,
         o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
         4,
@@ -49,7 +49,7 @@ def execute_global_registration(
             o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(
                 distance_threshold)
         ],
-        o3d.pipelines.registration.RANSACConvergenceCriteria(4000000, 500))
+        o3d.pipelines.registration.RANSACConvergenceCriteria(4000000, 0.9999))
     # result = o3d.pipelines.registration.registration_fast_based_on_feature_matching(
     #     src_pts, dst_pts, src_features, dst_features,
     #     o3d.pipelines.registration.FastGlobalRegistrationOption(
@@ -226,6 +226,10 @@ class LatentMatcher(object):
             use_gpu=use_gpu
         )
 
+def normalize_latents(latents):
+    norm = np.linalg.norm(latents, ord=2, axis=-1, keepdims=True)
+    norm[norm == 0] == 1
+    return latents / norm
 
 def load_data(args):
     input_data = dict()
@@ -233,8 +237,8 @@ def load_data(args):
         open(args.src_voxels, 'rb'))['voxels']
     input_data['dst_voxels'] = pickle.load(
         open(args.dst_voxels, 'rb'))['voxels']
-    input_data['src_latents'] = np.load(args.src_latents)
-    input_data['dst_latents'] = np.load(args.dst_latents)
+    input_data['src_latents'] = normalize_latents(np.load(args.src_latents))
+    input_data['dst_latents'] = normalize_latents(np.load(args.dst_latents))
     input_data['voxel_size'] = pickle.load(
         open(args.src_voxels, 'rb'))['voxel_size']
 

@@ -34,6 +34,7 @@ if __name__ == '__main__':
     parser.add_argument('--voxel-size', type=float, default=0.1)
     parser.add_argument('--mnfld-pnts', type=int, default=4096)
     parser.add_argument('--network', type=str, default=None)
+    parser.add_argument('--skip', type=int, default=0)
     args = parser.parse_args()
 
     scene_list = [
@@ -65,9 +66,14 @@ if __name__ == '__main__':
             frame_selector = get_frame_selector(
                 scene_name, len(depth_imgs), args.frames_per_frag)
             for ind in frame_selector:
+
                 # if frag_idx != 0 and frag_idx != 3:
                 #     frag_idx += 1
                 #     continue
+                if frag_idx < args.skip:
+                    frag_idx += 1
+                    continue
+                print("processing frag {}".format(frag_idx))
                 sampler = DepthSampler(
                     scene_path,
                     seq_name,

@@ -7,8 +7,6 @@ import open3d as o3d
 import torch
 import trimesh
 from sklearn.neighbors import KDTree
-
-from transformer import PointNetTransformer
 from utils import load_model
 
 
@@ -64,10 +62,10 @@ class Voxelizer(object):
 
         self.mnfld_pnts = mnfld_pnts
         self.network = network
-        if network is not None:
-            self.network = PointNetTransformer()
-            load_model(network, self.network)
-            self.network.cuda().eval()
+        # if network is not None:
+        #     self.network = PointNetTransformer()
+        #     load_model(network, self.network)
+        #     self.network.cuda().eval()
 
     def display_sdf(self, pts, sdf):  # , voxel_size, rotation, centroid):
         color = np.zeros_like(pts)
@@ -104,7 +102,6 @@ class Voxelizer(object):
         voxels = points[voxels, :]
         print("{} voxels to be sampled".format(voxels.shape[0]))
 
-
         num_rand_pts = min(2**17, self.points.shape[0])
         surface = self.points[np.random.permutation(
             self.points.shape[0])[:num_rand_pts], :]
@@ -113,8 +110,7 @@ class Voxelizer(object):
         rand_sdf = torch.from_numpy(rand_sdf[0][:, 0])
         print("constructed kd-tree")
 
-    
-        max_num_pcd = 2**12
+        max_num_pcd = 2**14
         samples = []
         centroids = []
         rotations = []
@@ -133,6 +129,12 @@ class Voxelizer(object):
             # nsdf = neg_sdf[selector, :]
             # psdf = pos_sdf[selector, :]
 
+            # points = np.concatenate(
+            #     [self.points, self.points+0.015*self.normals, self.points-0.015*self.normals], axis=0)
+            # sdf = np.concatenate([np.zeros(self.points.shape[0],), np.zeros(
+            #     self.points.shape[0],)+0.05, np.zeros(self.points.shape[0],)-0.015], axis=0)
+            # self.display_sdf(points, sdf)
+
             if pcd.shape[0] > 2048:
                 surf = pcd[torch.randperm(pcd.shape[0])[:2048], :]
             else:
@@ -140,19 +142,21 @@ class Voxelizer(object):
             # surf = pcd
             centroid = torch.mean(surf, dim=0)
             rotation = np.eye(3)
-            if self.network is not None and surf.shape[0] >= 2048:
-                surf = surf[torch.randperm(pcd.shape[0])[:2048], :]
-                rotation = self.get_rotation(surf, centroid, voxel_size)
-            elif surf.shape[0] > 10:
+            # if self.network is not None and surf.shape[0] >= 2048:
+            #     surf = surf[torch.randperm(pcd.shape[0])[:2048], :]
+            #     rotation = self.get_rotation(surf, centroid, voxel_size)
+            # elif surf.shape[0] > 10:
+            if surf.shape[0] > 10:
                 rotation = toldi_compute_xyz(
-                    surf.detach().cpu().numpy(), centroid.detach().cpu().numpy())
+                    surf.detach().cpu().numpy(), 
+                    centroid.detach().cpu().numpy())
                 num_aligned += 1
 
             centroids.append(centroid.detach().cpu().numpy())
             rotations.append(rotation)
 
             if pcd.shape[0] > max_num_pcd:
-                rand_sel = torch.randperm(pcd.shape[0])[:max_num_pcd]
+                rand_sel = torch.randperm(pcd.shape[0])[: max_num_pcd]
                 pcd = pcd[rand_sel, :]
                 normal = normal[rand_sel, :]
                 weight = weight[rand_sel]
@@ -170,13 +174,14 @@ class Voxelizer(object):
             global_pts = torch.matmul(
                 global_pts.cuda(), torch.from_numpy(rotation).float().cuda()) + centroid
 
-            d = 0.015
-            d2 = 0.005
-            d = torch.ones((pcd.shape[0], 1)) * d
+            d1 = 0.015
+            d2 = 0.01
+            d1 = torch.randn((pcd.shape[0], 1)) * d1
+            d2 = torch.randn((pcd.shape[0], 1)) * d2
             sample_pts = torch.cat([
                 pcd,
-                pcd + normal*d.cuda(),
-                pcd - normal*d.cuda(),
+                pcd + normal*d1.cuda(),
+                pcd + normal*d2.cuda(),
                 # pcd + normal*d2,
                 # pcd - normal*d2,
                 rand_sample,
@@ -184,8 +189,8 @@ class Voxelizer(object):
             ], axis=0)
             sample_sdf = torch.cat([
                 torch.zeros((pcd.shape[0],)),
-                torch.zeros((pcd.shape[0],))+d[..., 0],
-                torch.zeros((pcd.shape[0],))-d[..., 0],
+                torch.zeros((pcd.shape[0],))+d1[..., 0],
+                torch.zeros((pcd.shape[0],))+d2[..., 0],
                 # torch.zeros((pcd.shape[0],))+d2,
                 # torch.zeros((pcd.shape[0],))-d2,
                 rand_sdf_sample,
@@ -269,7 +274,7 @@ class Voxelizer(object):
 
             sample = np.zeros((sample_pts.shape[0], 6))
             sample[:, 0] = vid
-            sample[:, 1:4] = sample_pts.detach().cpu().numpy()
+            sample[:, 1: 4] = sample_pts.detach().cpu().numpy()
             sample[:, 4] = sample_sdf.detach().cpu().numpy().squeeze()
             sample[:, 5] = sample_weights.detach().cpu().numpy()
             samples.append(sample)
