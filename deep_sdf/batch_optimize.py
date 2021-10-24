@@ -43,6 +43,8 @@ if __name__ == '__main__':
     splits = json.load(open(args.split, 'r'))
     for scene_name, num_frag in splits.items():
         for i in range(num_frag):
+            if os.path.exists(os.path.join(args.output, scene_name, str(i))):
+                continue
             # if i != 0 and i != 3:
             #     continue
             if args.skip != 0 and i < args.skip:

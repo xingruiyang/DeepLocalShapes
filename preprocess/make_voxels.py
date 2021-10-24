@@ -92,13 +92,13 @@ class Voxelizer(object):
         rand_pts = points * (0.99-torch.rand(points.shape[0], 1).cuda() * 0.4)
 
         # uniform grids
-        # voxels = torch.div(points, voxel_size, rounding_mode='floor')
-        # voxels = torch.unique(voxels, dim=0)
-        # voxels += .5
-        # voxels *= voxel_size
+        voxels = torch.div(points, voxel_size, rounding_mode='floor')
+        voxels = torch.unique(voxels, dim=0)
+        voxels += .5
+        voxels *= voxel_size
 
         # voxels are randomly selected from the input point cloud
-        voxels = torch.randperm(points.shape[0])[:1500]
+        voxels = torch.randperm(points.shape[0])[:voxels.shape[0]]
         voxels = points[voxels, :]
         print("{} voxels to be sampled".format(voxels.shape[0]))
 
@@ -116,7 +116,7 @@ class Voxelizer(object):
         rotations = []
         num_aligned = 0
         for vid in range(voxels.shape[0]):
-            print("{}/{}".format(vid, voxels.shape[0]))
+            # print("{}/{}".format(vid, voxels.shape[0]))
             voxel = voxels[vid, :]
             pcd = points - voxel
             dist = torch.norm(pcd, p=2, dim=-1)

@@ -145,7 +145,6 @@ class Voxelizer(object):
                 torch.ones_like(neg_sdf)
                 # global_weight.cuda()
             ], dim=0)
-            
 
             # self.display_sdf(sample_pts.detach().cpu(),
             #                  sample_sdf.detach().cpu())
@@ -156,12 +155,12 @@ class Voxelizer(object):
             sample[:, 4] = sample_sdf.detach().cpu().numpy()
             sample[:, 5] = sample_weights.detach().cpu().numpy()
             samples.append(sample)
-            surf_pts.append(surf.detach().cpu().numpy())
+            # surf_pts.append(surf.detach().cpu().numpy())
             centroids.append(centroid)
             rotations.append(rotation)
 
         samples = np.concatenate(samples, axis=0)
-        surf_pts = np.concatenate(surf_pts, axis=0)
+        # surf_pts = np.concatenate(surf_pts, axis=0)
         centroids = np.stack(centroids, axis=0)
         rotations = np.stack(rotations, axis=0)
         voxels = voxels.detach().cpu().numpy()
@@ -179,6 +178,8 @@ if __name__ == '__main__':
     parser.add_argument('--num-shapes', type=int, default=100)
     parser.add_argument('--voxel-size', type=float, default=0.1)
     args = parser.parse_args()
+
+    dirs = ['03001627', '04256520', '04379243']
 
     subdirs = glob.glob(os.path.join(args.in_dir, "*_surf.npy"))
 

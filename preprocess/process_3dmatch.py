@@ -5,7 +5,7 @@ import natsort
 import os
 from depth_sampler import DepthSampler
 from make_voxels import Voxelizer
-
+import trimesh
 
 import argparse
 from itertools import chain
@@ -38,39 +38,44 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     scene_list = [
-        '7-scenes-redkitchen']
-    # 'sun3d-hotel_umd-maryland_hotel3',
-    # 'sun3d-mit_76_studyroom-76-1studyroom2',
-    # 'sun3d-mit_lab_hj-lab_hj_tea_nov_2_2012_scan1_erika',
-    # 'sun3d-home_at-home_at_scan1_2013_jan_1',
-    # 'sun3d-home_md-home_md_scan9_2012_sep_30',
-    # 'sun3d-hotel_uc-scan3',
-    # 'sun3d-hotel_umd-maryland_hotel1']
+        # '7-scenes-redkitchen'
+        'sun3d-hotel_umd-maryland_hotel3',
+        'sun3d-mit_76_studyroom-76-1studyroom2',
+        'sun3d-mit_lab_hj-lab_hj_tea_nov_2_2012_scan1_erika',
+        'sun3d-home_at-home_at_scan1_2013_jan_1',
+        'sun3d-home_md-home_md_scan9_2012_sep_30',
+        'sun3d-hotel_uc-scan3',
+        'sun3d-hotel_umd-maryland_hotel1'
+    ]
 
     for scene_name in scene_list:
         scene_path = os.path.join(args.path, scene_name)
         print("processing {}".format(scene_path))
-        seq_list = [f for f in os.listdir(
-            scene_path) if os.path.isdir(os.path.join(scene_path, f)) and f != 'alt']
+        # seq_list = [f for f in os.listdir(
+        #     scene_path) if os.path.isdir(os.path.join(scene_path, f)) and f != 'alt']
+        seq_list = glob.glob(os.path.join(scene_path, "seq-*"))
         seq_list = natsort.natsorted(seq_list)
         intr_path = os.path.join(scene_path, 'camera-intrinsics.txt')
         intr = np.loadtxt(intr_path)
+        print(seq_list)
 
         frag_idx = 0
         for seq_id in range(min(len(seq_list), 3)):
             print("processing seq {}".format(seq_list[seq_id]))
             seq_name = seq_list[seq_id]
             depth_imgs = glob.glob(os.path.join(
-                scene_path, seq_name, "*.depth.png"))
+                seq_name, "*.depth.png"))
             depth_imgs = natsort.natsorted(depth_imgs)
             frame_selector = get_frame_selector(
                 scene_name, len(depth_imgs), args.frames_per_frag)
+            print(frame_selector)
             for ind in frame_selector:
-
-                # if frag_idx != 0 and frag_idx != 3:
-                #     frag_idx += 1
-                #     continue
                 if frag_idx < args.skip:
+                    frag_idx += 1
+                    continue
+                seq_out = os.path.join(
+                    args.output, scene_name, str(frag_idx))
+                if os.path.exists(seq_out):
                     frag_idx += 1
                     continue
                 print("processing frag {}".format(frag_idx))
@@ -90,9 +95,9 @@ if __name__ == '__main__':
                 voxelizer = Voxelizer(
                     point_cloud, args.network,
                     args.mnfld_pnts)
-
-                seq_out = os.path.join(
-                    args.output, scene_name, str(frag_idx))
+                # trimesh.PointCloud(point_cloud[:, 1:4], point_cloud[:, 4:]).show()
+                # seq_out = os.path.join(
+                #     args.output, scene_name, str(frag_idx))
                 os.makedirs(seq_out, exist_ok=True)
 
                 samples = voxelizer.create_voxels(

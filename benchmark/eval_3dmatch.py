@@ -81,6 +81,7 @@ if __name__ == '__main__':
     mask = np.zeros((num_fragments, num_fragments), dtype=int)
     gt_num = 0
     for i in range(len(gt_ind)):
+        # print(gt_ind[i])
         if gt_ind[i][1] - gt_ind[i][0] > 1:
             mask[gt_ind[i][0],  gt_ind[i][1]] = i
             gt_num += 1
@@ -97,8 +98,8 @@ if __name__ == '__main__':
                 p = compute_transformation_error(rel_pose, gt_info[idx])
                 if p <= args.err2:
                     good += 1
-                # else:
-                #     print(results_ind[i])
+                else:
+                    print(gt_ind[idx])
 
     print(gt_num, rs_num)
     recall = good / gt_num

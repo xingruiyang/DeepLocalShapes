@@ -293,7 +293,7 @@ if __name__ == '__main__':
         transformed_mesh = copy.deepcopy(src_mesh)
 
         src_mesh.paint_uniform_color([0, 0.5, 1])
-        geometry.append(src_mesh)
+        # geometry.append(src_mesh)
         # if args.icp:
         #     final_mesh = copy.deepcopy(src_mesh)
         #     final_mesh.paint_uniform_color([0.5, 1, 0])
