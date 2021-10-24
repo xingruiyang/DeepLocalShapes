@@ -70,6 +70,7 @@ if __name__ == '__main__':
 
     splits = json.load(open(args.split, 'r'))
     for scene_name, num_frags in splits.items():
+        print("processing {}".format(scene_name))
         indices = []
         poses = []
         data_path = os.path.join(args.data, scene_name)
