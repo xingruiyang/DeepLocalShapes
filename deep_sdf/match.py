@@ -231,16 +231,40 @@ def normalize_latents(latents):
     norm[norm == 0] == 1
     return latents / norm
 
+# def load_data(args):
+#     input_data = dict()
+#     input_data['src_voxels'] = pickle.load(
+#         open(args.src_voxels, 'rb'))['voxels']
+#     input_data['dst_voxels'] = pickle.load(
+#         open(args.dst_voxels, 'rb'))['voxels']
+#     input_data['src_latents'] = normalize_latents(np.load(args.src_latents))
+#     input_data['dst_latents'] = normalize_latents(np.load(args.dst_latents))
+#     input_data['voxel_size'] = pickle.load(
+#         open(args.src_voxels, 'rb'))['voxel_size']
+
+#     if args.network_cfg and args.network_ckpt and args.icp:
+#         network_args = json.load(open(args.network_cfg, 'r'))
+#         network = ImplicitNet(**network_args['params'])
+#         load_model(args.network_ckpt, network)
+#         input_data['network'] = network
+#         input_data['query_pts'] = trimesh.load(args.src_mesh).sample(50000)
+
+#     if args.orient:
+#         input_data['rotations'] = pickle.load(
+#             open(args.dst_voxels, 'rb'))['rotations']
+#         input_data['centroids'] = pickle.load(
+#             open(args.dst_voxels, 'rb'))['centroids']
+#     return input_data
 def load_data(args):
+    src_data = np.load(args.src_voxels)
+    dst_data = np.load(args.dst_voxels)
+
     input_data = dict()
-    input_data['src_voxels'] = pickle.load(
-        open(args.src_voxels, 'rb'))['voxels']
-    input_data['dst_voxels'] = pickle.load(
-        open(args.dst_voxels, 'rb'))['voxels']
+    input_data['src_voxels'] = src_data['voxels']
+    input_data['dst_voxels'] = dst_data['voxels']
     input_data['src_latents'] = normalize_latents(np.load(args.src_latents))
     input_data['dst_latents'] = normalize_latents(np.load(args.dst_latents))
-    input_data['voxel_size'] = pickle.load(
-        open(args.src_voxels, 'rb'))['voxel_size']
+    input_data['voxel_size'] = src_data['voxel_size']
 
     if args.network_cfg and args.network_ckpt and args.icp:
         network_args = json.load(open(args.network_cfg, 'r'))
@@ -250,12 +274,9 @@ def load_data(args):
         input_data['query_pts'] = trimesh.load(args.src_mesh).sample(50000)
 
     if args.orient:
-        input_data['rotations'] = pickle.load(
-            open(args.dst_voxels, 'rb'))['rotations']
-        input_data['centroids'] = pickle.load(
-            open(args.dst_voxels, 'rb'))['centroids']
+        input_data['rotations'] = dst_data['rotations']
+        input_data['centroids'] = dst_data['centroids']
     return input_data
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

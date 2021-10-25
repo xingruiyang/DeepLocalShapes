@@ -7,7 +7,7 @@ import torch
 import trimesh
 from torch.utils.tensorboard import SummaryWriter
 
-from dataset import SampleDataset
+from dataset import SampleDataset, SceneDataset
 from losses import chamfer_distance
 from network import ImplicitNet
 from reconstruct import ShapeReconstructor
@@ -222,8 +222,9 @@ if __name__ == '__main__':
     network = ImplicitNet(**net_params).to(device)
     load_model(args.ckpt, network, device)
 
-    eval_data = SampleDataset(
-        args.data, args.orient, training=True)
+    # eval_data = SampleDataset(
+    #     args.data, args.orient, training=True)
+    eval_data = SceneDataset(args.data, training=True)
     # logger = SummaryWriter(os.path.join(args.output, 'logs/'))
     latent_optim = LatentOptimizer(
         network,

@@ -46,7 +46,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('data', type=str)
     parser.add_argument('misc', type=str)
-    parser.add_argument('split', type=str)
     parser.add_argument('output', type=str)
     parser.add_argument('--num-iter', type=int, default=10)
     parser.add_argument('--dist-th', type=float, default=0.1)
@@ -68,7 +67,17 @@ if __name__ == '__main__':
         load_model(args.network_ckpt, network)
         match_args['network'] = network
 
-    splits = json.load(open(args.split, 'r'))
+    splits = {
+        "7-scenes-redkitchen": 60,
+        "sun3d-mit_76_studyroom-76-1studyroom2": 66,
+        "sun3d-mit_lab_hj-lab_hj_tea_nov_2_2012_scan1_erika": 38,
+        "sun3d-home_at-home_at_scan1_2013_jan_1": 60,
+        "sun3d-home_md-home_md_scan9_2012_sep_30": 60,
+        "sun3d-hotel_uc-scan3": 55,
+        "sun3d-hotel_umd-maryland_hotel1": 57,
+        "sun3d-hotel_umd-maryland_hotel3": 36
+    }
+
     for scene_name, num_frags in splits.items():
         print("processing {}".format(scene_name))
         indices = []
@@ -109,4 +118,5 @@ if __name__ == '__main__':
                 pose = poses[i]
                 for j in range(4):
                     f.write("{} {} {} {}\n".format(
-                        pose[j, 0], pose[j, 1], pose[j, 2], pose[j, 3]))
+                        pose[j, 0], pose[j, 1],
+                        pose[j, 2], pose[j, 3]))

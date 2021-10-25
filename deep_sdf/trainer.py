@@ -8,7 +8,7 @@ from torch.autograd import grad
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
 
-from dataset import SampleDataset
+from dataset import SampleDataset, SceneDataset
 from losses import chamfer_distance
 from network import ImplicitNet
 from reconstruct import ShapeReconstructor
@@ -219,7 +219,8 @@ if __name__ == '__main__':
         print("load model from {}".format(args.load))
         load_model(args.load, network, device)
 
-    dataset = SampleDataset(args.data, args.orient, training=True)
+    # dataset = SampleDataset(args.data, args.orient, training=True)
+    dataset = SceneDataset(args.data, training=True)
     latent_vecs = torch.zeros((dataset.num_latents, net_params['latent_dim']))
     latent_vecs = latent_vecs.to(device)
     torch.nn.init.normal_(latent_vecs, 0, 0.01**2)

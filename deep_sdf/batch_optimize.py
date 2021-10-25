@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import trimesh
 
-from dataset import SampleDataset
+from dataset import SampleDataset, SceneDataset
 from network import ImplicitNet
 from optimizer import LatentOptimizer
 from reconstruct import ShapeReconstructor
@@ -15,7 +15,6 @@ from utils import load_model
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("cfg", type=str)
-    parser.add_argument("split", type=str)
     parser.add_argument("ckpt", type=str)
     parser.add_argument("input", type=str)
     parser.add_argument("output", type=str)
@@ -40,7 +39,17 @@ if __name__ == '__main__':
     network = ImplicitNet(**net_params).to(device)
     load_model(args.ckpt, network, device)
 
-    splits = json.load(open(args.split, 'r'))
+    splits = {
+        # "7-scenes-redkitchen": 60,
+        # "sun3d-mit_76_studyroom-76-1studyroom2": 66,
+        # "sun3d-mit_lab_hj-lab_hj_tea_nov_2_2012_scan1_erika": 38,
+        # "sun3d-home_at-home_at_scan1_2013_jan_1": 60,
+        "sun3d-home_md-home_md_scan9_2012_sep_30": 60,
+        # "sun3d-hotel_uc-scan3": 55,
+        # "sun3d-hotel_umd-maryland_hotel1": 57,
+        # "sun3d-hotel_umd-maryland_hotel3": 36
+    }
+
     for scene_name, num_frag in splits.items():
         for i in range(num_frag):
             if os.path.exists(os.path.join(args.output, scene_name, str(i))):
@@ -55,8 +64,9 @@ if __name__ == '__main__':
             os.makedirs(output_dir, exist_ok=True)
             log_dir = None if args.ckpt_freq <= 0 else os.path.join(
                 output_dir, "logs")
-            eval_data = SampleDataset(
-                input_dir, args.orient, args.crop, training=True)
+            # eval_data = SampleDataset(
+            #     input_dir, args.orient, args.crop, training=True)
+            eval_data = SceneDataset(input_dir, training=True)
             latent_optim = LatentOptimizer(
                 network,
                 eval_data.voxels,
