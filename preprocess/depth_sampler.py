@@ -82,7 +82,7 @@ class DepthSampler(object):
         intr //= (2**self.downsample)
         intr[2, 2] = 1
         depth_files = glob.glob(os.path.join(
-            self.scene_id, "*.depth.png"))
+            self.scene_path, self.scene_id, "*.depth.png"))
         depth_files = natsort.natsorted(depth_files)
 
         surface_points = []
@@ -95,7 +95,7 @@ class DepthSampler(object):
             print(index)
             filepath = depth_files[index]
             pose_path = os.path.join(
-                self.scene_id, 'frame-{:06d}.pose.txt'.format(index))
+                self.scene_path, self.scene_id, 'frame-{:06d}.pose.txt'.format(index))
             pose = np.loadtxt(pose_path).astype(float)
             if init_pose is None:
                 init_pose = pose
@@ -116,7 +116,6 @@ class DepthSampler(object):
                 normal, pose[:3, :3].transpose())
             pcd = np.matmul(
                 pcd, pose[:3, :3].transpose()) + pose[:3, 3]
-
             point_weights.append(1.0/depth)
             surface_points.append(pcd)
             surface_normals.append(normal)

@@ -50,14 +50,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     scene_list = [
-        # '7-scenes-redkitchen',
-        # 'sun3d-hotel_umd-maryland_hotel3',
+        '7-scenes-redkitchen',
+        'sun3d-hotel_umd-maryland_hotel3',
         'sun3d-mit_76_studyroom-76-1studyroom2',
         'sun3d-mit_lab_hj-lab_hj_tea_nov_2_2012_scan1_erika',
         'sun3d-home_at-home_at_scan1_2013_jan_1',
         'sun3d-home_md-home_md_scan9_2012_sep_30',
         'sun3d-hotel_uc-scan3',
-        'sun3d-hotel_umd-maryland_hotel1'
+        # 'sun3d-hotel_umd-maryland_hotel1'
     ]
 
     num_frame_frag = 50
@@ -72,7 +72,7 @@ if __name__ == '__main__':
 
         map = py_vmapping.map(640, 480, intr)
         map.set_depth_scale(1000.0)
-        map.create_map(500000, 450000, args.voxel_size)
+        map.create_map(550000, 450000, args.voxel_size)
         frag_id = 0
         for seq_id in range(min(len(seq_list), 3)):
             print("processing seq {}".format(seq_list[seq_id]))
@@ -92,6 +92,8 @@ if __name__ == '__main__':
                         scene_path, seq_name, 'frame-{:06d}.pose.txt'.format(frame_id))
                     pose = np.loadtxt(pose_filename)
                     depth = cv2.imread(depth, -1)
+                    cv2.imshow("depth", depth/np.max(depth))
+                    cv2.waitKey(1)
                     map.fuse_depth(depth, pose)
                 for i in range(num_frame_frag):
                     frame_id = frame_begin + i
@@ -99,8 +101,8 @@ if __name__ == '__main__':
                         scene_path, seq_name, 'frame-{:06d}.pose.txt'.format(frame_id))
                     pose = np.loadtxt(pose_filename)
                     vmap = map.get_depth(pose)
-                    cv2.imshow("vmap", vmap)
-                    cv2.waitKey(1)
+                    # cv2.imshow("vmap", vmap)
+                    # cv2.waitKey(1)
                     traced_depth = vmap[..., -2]
                     cv2.imwrite(
                         os.path.join(scene_path, seq_name,
