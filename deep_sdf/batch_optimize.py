@@ -53,7 +53,8 @@ if __name__ == '__main__':
             output_dir = os.path.join(args.output, scene_name, str(i))
             print('optimising latents {}'.format(input_dir))
             os.makedirs(output_dir, exist_ok=True)
-            log_dir = os.path.join(output_dir, "logs")
+            log_dir = None if args.ckpt_freq <= 0 else os.path.join(
+                output_dir, "logs")
             eval_data = SampleDataset(
                 input_dir, args.orient, args.crop, training=True)
             latent_optim = LatentOptimizer(

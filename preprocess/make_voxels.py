@@ -98,7 +98,7 @@ class Voxelizer(object):
         voxels *= voxel_size
 
         # voxels are randomly selected from the input point cloud
-        voxels = torch.randperm(points.shape[0])[:voxels.shape[0]]
+        voxels = torch.randperm(points.shape[0])[:voxels.shape[0]*3//2]
         voxels = points[voxels, :]
         print("{} voxels to be sampled".format(voxels.shape[0]))
 
