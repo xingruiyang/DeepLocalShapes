@@ -20,20 +20,15 @@ def normalize_latents(latents):
 
 def load_data(data_path, misc_path, load_orient=False, load_mesh=False, prefix='src'):
     input_data = dict()
-    input_data[prefix+'_voxels'] = pickle.load(
-        open(os.path.join(data_path, 'samples.pkl'), 'rb'))['voxels']
-    input_data[prefix +
-               '_latents'] = np.load(os.path.join(misc_path, 'latent_vecs.npy'))
-    input_data[prefix +
-               '_latents'] = normalize_latents(input_data[prefix + '_latents'])
-    input_data['voxel_size'] = pickle.load(
-        open(os.path.join(data_path, 'samples.pkl'), 'rb'))['voxel_size']
+    data = np.load(os.path.join(data_path, 'meta.npz'))
+    input_data[prefix+'_voxels'] = data['voxels']
+    input_data[prefix + '_latents'] = np.load(os.path.join(misc_path, 'latent_vecs.npy'))
+    input_data[prefix + '_latents'] = normalize_latents(input_data[prefix + '_latents'])
+    input_data['voxel_size'] = data['voxel_size']
 
     if load_orient:
-        input_data['rotations'] = pickle.load(
-            open(os.path.join(data_path, 'samples.pkl'), 'rb'))['rotations']
-        input_data['centroids'] = pickle.load(
-            open(os.path.join(data_path, 'samples.pkl'), 'rb'))['centroids']
+        input_data['rotations'] = data['rotations']
+        input_data['centroids'] = data['centroids']
 
     if load_mesh:
         input_data['query_pts'] = trimesh.load(
@@ -68,14 +63,14 @@ if __name__ == '__main__':
         match_args['network'] = network
 
     splits = {
-        "7-scenes-redkitchen": 60,
+        #"7-scenes-redkitchen": 60,
         "sun3d-mit_76_studyroom-76-1studyroom2": 66,
-        "sun3d-mit_lab_hj-lab_hj_tea_nov_2_2012_scan1_erika": 38,
-        "sun3d-home_at-home_at_scan1_2013_jan_1": 60,
+        #"sun3d-mit_lab_hj-lab_hj_tea_nov_2_2012_scan1_erika": 38,
+        #"sun3d-home_at-home_at_scan1_2013_jan_1": 60,
         "sun3d-home_md-home_md_scan9_2012_sep_30": 60,
-        "sun3d-hotel_uc-scan3": 55,
-        "sun3d-hotel_umd-maryland_hotel1": 57,
-        "sun3d-hotel_umd-maryland_hotel3": 36
+        # "sun3d-hotel_uc-scan3": 55,
+        # "sun3d-hotel_umd-maryland_hotel1": 57,
+        #"sun3d-hotel_umd-maryland_hotel3": 36
     }
 
     for scene_name, num_frags in splits.items():
