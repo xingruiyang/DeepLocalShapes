@@ -40,7 +40,7 @@ def load_data(data_path, misc_path, load_orient=False, load_mesh=False, prefix='
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('data', type=str)
-    parser.add_argument('misc', type=str)
+    parser.add_argument('latents', type=str)
     parser.add_argument('output', type=str)
     parser.add_argument('--num-iter', type=int, default=10)
     parser.add_argument('--dist-th', type=float, default=0.1)
@@ -63,14 +63,14 @@ if __name__ == '__main__':
         match_args['network'] = network
 
     splits = {
-        #"7-scenes-redkitchen": 60,
-        "sun3d-mit_76_studyroom-76-1studyroom2": 66,
-        #"sun3d-mit_lab_hj-lab_hj_tea_nov_2_2012_scan1_erika": 38,
-        #"sun3d-home_at-home_at_scan1_2013_jan_1": 60,
-        "sun3d-home_md-home_md_scan9_2012_sep_30": 60,
+        "7-scenes-redkitchen": 60,
+        # "sun3d-mit_76_studyroom-76-1studyroom2": 66,
+        # "sun3d-mit_lab_hj-lab_hj_tea_nov_2_2012_scan1_erika": 38,
+        "sun3d-home_at-home_at_scan1_2013_jan_1": 60,
+        # "sun3d-home_md-home_md_scan9_2012_sep_30": 60,
         # "sun3d-hotel_uc-scan3": 55,
         # "sun3d-hotel_umd-maryland_hotel1": 57,
-        #"sun3d-hotel_umd-maryland_hotel3": 36
+        "sun3d-hotel_umd-maryland_hotel3": 36
     }
 
     for scene_name, num_frags in splits.items():
@@ -78,7 +78,7 @@ if __name__ == '__main__':
         indices = []
         poses = []
         data_path = os.path.join(args.data, scene_name)
-        misc_path = os.path.join(args.misc, scene_name)
+        misc_path = os.path.join(args.latents, scene_name)
         for frag_idx in range(num_frags):
             src_data = load_data(
                 os.path.join(data_path, str(frag_idx)),
