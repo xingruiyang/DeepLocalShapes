@@ -80,7 +80,7 @@ def draw_voxels(pnts: np.ndarray,
     Args:
         pnts (ndarray|tensor): pnts of shape Nx3
         voxels (ndarray|tensor): voxels of shape Mx3
-        voxels (float, optional): the length of voxels
+        voxel_size (float, optional): the length of voxels
     """
     if isinstance(pnts, torch.Tensor):
         pts = pnts.detach().cpu().numpy()

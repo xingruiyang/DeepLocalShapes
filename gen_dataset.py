@@ -48,7 +48,21 @@ def sample_voxels(centres: torch.Tensor, num_samples: int, range: float):
     return samples.reshape(-1, 3)
 
 
-def save_samples(surface, samples, voxels, voxel_size, ckpt, out_path):
+def save_samples(surface: torch.Tensor,
+                 samples: torch.Tensor,
+                 voxels: torch.Tensor,
+                 voxel_size: float,
+                 ckpt: str,
+                 out_path: str):
+    '''Split sample pnts into voxel grids and save as npz format
+    Args:
+        surface (tensor)  : surface pnts to esitmate transformations
+        samples (tensor) : a set of pnts-sdf pairs to sample from
+        voxels (tensor): a set of voxels to sample from
+        voxel_size (float): the length of voxels
+        ckpt (str): checkpoints to the transformer network
+        out_path (str): output directory
+    '''
     transformer = PointNetTransformer.create_from_ckpt(ckpt)
     transformer.eval().cuda()
     data = []
@@ -111,6 +125,9 @@ def save_samples(surface, samples, voxels, voxel_size, ckpt, out_path):
 
 
 if __name__ == '__main__':
+    '''Sample training/evaluation examples from the given ShapeNet models
+    You need to provide path to the ShapeNetCoreV.2 dataset
+    '''
     parser = argparse.ArgumentParser()
     parser.add_argument('data_path', type=str)
     parser.add_argument('out_path', type=str)

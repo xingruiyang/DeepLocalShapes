@@ -101,7 +101,7 @@ class BatchMeshDataset(Dataset):
                 data_point = data['samples']
 
                 num_voxels = int(data_point[-1, 0]+1)
-                self.latent_map[cat_filename] = (
+                self.latent_map[cat_filename.split('.')[0]] = (
                     voxel_count, voxel_count+num_voxels)
 
                 data_point[:, 0] += voxel_count
