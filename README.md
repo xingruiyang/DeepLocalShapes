@@ -1,4 +1,10 @@
-BRANCH: DEV
+BRANCH: TOY EXAMPLE
 ===
 
-1. This branch is to test the ability of the network to sample from large amount of input data
+A modified network using NGLOD's sampling method.
+
+## Install
+
+1. `mesh2sdf` from `nglod`
+2. `tinyobjloader` (included in `third_party/tinyobjloader`)
+3. also `pip install tinyobjloader`

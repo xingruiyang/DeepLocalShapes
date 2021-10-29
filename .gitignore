@@ -143,3 +143,5 @@ dataset/
 output
 build/
 .vscode
+lightning_logs
+screen_shot
