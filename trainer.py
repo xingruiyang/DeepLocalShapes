@@ -118,7 +118,7 @@ if __name__ == '__main__':
     parser.add_argument('--cpu', action='store_true')
     parser.add_argument('--orient', action='store_true')
     args = parser.parse_args()
-    os.makedirs(args.out_path, exits_ok=True)
+    os.makedirs(args.out_path, exist_ok=True)
 
     device = torch.device('cpu' if args.cpu else 'cuda')
     train_data = BatchMeshDataset(args.data, transform=args.orient)

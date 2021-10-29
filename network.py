@@ -77,7 +77,7 @@ class ImplicitNet(nn.Module):
         else:
             trainable_params = [{
                 'params': self.parameters(), 'lr': 1e-3},
-                {'params': self.latent_vecs, 'lr': 1e-3}]
+                {'params': self.latent_vecs, 'lr': 5e-4}]
         optimizer = self.optimizer(trainable_params)
         return optimizer
 

@@ -1,14 +1,17 @@
 import argparse
 import json
 import os
+from copy import deepcopy
 
 import numpy as np
 import torch
 import trimesh
 from scipy.spatial.transform import Rotation as R
+
 from network import PointNetTransformer
 from third_party.torchgp import (compute_sdf, load_obj, normalize,
                                  point_sample, sample_near_surface)
+from utils import cal_xyz_axis
 
 
 def get_voxels(pnts: torch.Tensor,
@@ -88,23 +91,29 @@ def save_samples(surface: torch.Tensor,
         centroid = torch.mean(pnts, dim=0)
         if surface_pnts.shape[0] > 10:
             ref_pnts = surface_pnts - centroid
-            rotation = transformer(
-                ref_pnts[None, ...],
-                transpose_input=True)[0, ...].reshape(3, 3)
+            rotation = cal_xyz_axis(ref_pnts)
+            # rotation = transformer(
+            #     ref_pnts[None, ...],
+            #     transpose_input=True)[0, ...].reshape(3, 3)
             # check rotation matrices
             # scene = trimesh.Scene()
             # for i in range(3):
             #     for j in range(3):
+            #         ref_pnts2 = deepcopy(ref_pnts)
+            #         ref_pnts2 += torch.randn_like(ref_pnts2) * 0.05
             #         ref_pnts2 = torch.matmul(
-            #             ref_pnts, torch.from_numpy(R.random().as_matrix()).cuda().float())
-            #         rotation = transformer(
-            #             ref_pnts2[None, ...],
-            #             transpose_input=True)[0, ...].reshape(3, 3)
-            #         ref_pnts2 = torch.matmul(ref_pnts2, rotation.transpose(0, 1))
+            #             ref_pnts2, torch.from_numpy(R.random().as_matrix()).cuda().float())
+            #         # rotation = transformer(
+            #         #     ref_pnts2[None, ...],
+            #         #     transpose_input=True)[0, ...].reshape(3, 3)
+            #         rotation = cal_xyz_axis(ref_pnts2)
+            #         ref_pnts2 = torch.matmul(
+            #             ref_pnts2, rotation.transpose(0, 1))
             #         transform = np.eye(4)
             #         transform[0, 3] = i * 2
             #         transform[1, 3] = j * 2
-            #         scene.add_geometry(trimesh.PointCloud(ref_pnts2.detach().cpu()), transform=transform)
+            #         scene.add_geometry(trimesh.PointCloud(
+            #             ref_pnts2.detach().cpu()), transform=transform)
             # scene.show()
         data.append(torch.cat(
             [indices[:, None].cuda(), pnts, sdf[:, None]],
