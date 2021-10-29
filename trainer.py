@@ -24,11 +24,16 @@ class Trainer():
         self.device = device
         self.ckpt_freq = ckpt_freq
 
-    def fit(self, model, train_data):
+    def fit(self, model, train_data, centroids=None, rotations=None):
         model.train()
         num_points = train_data.shape[0]
         num_batch = (num_points-1) // self.batch_size + 1
         optimizer = model.configure_optimizers()
+
+        if centroids is not None:
+            centroids = torch.from_numpy(centroids).to(self.device)
+        if rotations is not None:
+            rotations = torch.from_numpy(rotations).to(self.device)
 
         for n_epoch in range(self.num_epochs):
             print("shuffling inbetween batches")
@@ -36,8 +41,8 @@ class Trainer():
             np.random.shuffle(train_data)
             print("shuffling took {} seconds to finish".format(
                 time.time()-start_time))
-            pbar = tqdm(range(num_batch))
             batch_loss = 0
+            pbar = tqdm(range(num_batch))
             for n_batch in pbar:
                 bstart = n_batch * self.batch_size
                 bend = min(num_points, (n_batch+1)*self.batch_size)
@@ -48,6 +53,16 @@ class Trainer():
                 latent_ind = batch_data[:, 0].int()
                 sample_pnts = batch_data[:, 1:4].float()
                 sample_sdf = batch_data[:, 4].float()
+
+                if centroids is not None:
+                    centers = torch.index_select(centroids, 0, latent_ind)
+                    sample_pnts -= centers
+
+                if rotations is not None:
+                    rotation = torch.index_select(rotations, 0, latent_ind)
+                    sample_pnts = torch.matmul(
+                        sample_pnts.unsqueeze(1), rotation.transpose(-1, -2))
+                    sample_pnts = sample_pnts.squeeze()
 
                 losses = model.training_step(
                     (latent_ind, sample_pnts, sample_sdf))
@@ -90,11 +105,11 @@ if __name__ == '__main__':
     parser.add_argument('--ckpt_freq', type=int, default=-1)
     parser.add_argument('--ckpt', type=str, default=None)
     parser.add_argument('--cpu', action='store_true')
+    parser.add_argument('--orient', action='store_true')
     args = parser.parse_args()
 
     device = torch.device('cpu' if args.cpu else 'cuda')
-    print(device)
-    train_data = BatchMeshDataset(args.data)
+    train_data = BatchMeshDataset(args.data, transform=args.orient)
     model = ImplicitNet.create_from_cfg(
         args.cfg, ckpt=args.ckpt, device=device)
     model.initialize_latents(
@@ -108,7 +123,10 @@ if __name__ == '__main__':
         batch_size=args.batch_size
     )
     trainer.fit(
-        model, train_data.samples)
+        model,
+        train_data.samples,
+        train_data.centroids,
+        train_data.rotations)
 
     # model.save_model(os.path.join(args.output, 'last_ckpt.pth'))
     # model.save_latents(os.path.join(args.output, 'last_latents.npy'))

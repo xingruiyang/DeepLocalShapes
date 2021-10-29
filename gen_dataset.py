@@ -3,12 +3,12 @@ import json
 import os
 
 import numpy as np
-import open3d as o3d
 import torch
-
+import trimesh
+from scipy.spatial.transform import Rotation as R
+from network import PointNetTransformer
 from third_party.torchgp import (compute_sdf, load_obj, normalize,
                                  point_sample, sample_near_surface)
-from utils import cal_xyz_axis
 
 
 def get_voxels(pnts: torch.Tensor,
@@ -48,12 +48,14 @@ def sample_voxels(centres: torch.Tensor, num_samples: int, range: float):
     return samples.reshape(-1, 3)
 
 
-def get_samples(surface, samples, voxels, voxel_size):
+def save_samples(surface, samples, voxels, voxel_size, ckpt, out_path):
+    transformer = PointNetTransformer.create_from_ckpt(ckpt)
+    transformer.eval().cuda()
     data = []
-    num_voxels = voxels.shape[0]
-
     centroids = []
     rotations = []
+
+    num_voxels = voxels.shape[0]
     for i in range(num_voxels):
         voxel = voxels[i, :]
         pnts = samples[:, :3] - voxel
@@ -62,31 +64,52 @@ def get_samples(surface, samples, voxels, voxel_size):
         pnts = pnts[selector, :] / (1.5 * voxel_size)
         sdf = samples[selector, 3] / (1.5 * voxel_size)
         indices = torch.from_numpy(np.asarray([i]*pnts.shape[0]))
-        data.append(torch.cat(
-            [indices[:, None].cuda(), pnts, sdf[:, None]], dim=-1))
 
-        pnts = surface - voxel
-        selector = torch.norm(pnts, p=2, dim=-1)
+        surface_pnts = surface - voxel
+        selector = torch.norm(surface_pnts, p=2, dim=-1)
         selector = selector < (1.5 * voxel_size)
-        pnts = pnts[selector, :] / (1.5 * voxel_size)
+        surface_pnts = surface_pnts[selector, :] / (1.5 * voxel_size)
 
         rotation = torch.eye(3)
         centroid = torch.mean(pnts, dim=0)
-        if pnts.shape[0] > 10:
-            ref_pnts = pnts - centroid
-            rotation = cal_xyz_axis(ref_pnts)
-        rotations.append(rotation)
-        centroids.append(centroid)
+        if surface_pnts.shape[0] > 10:
+            ref_pnts = surface_pnts - centroid
+            rotation = transformer(
+                ref_pnts[None, ...],
+                transpose_input=True)[0, ...].reshape(3, 3)
+            # check rotation matrices
+            # scene = trimesh.Scene()
+            # for i in range(3):
+            #     for j in range(3):
+            #         ref_pnts2 = torch.matmul(
+            #             ref_pnts, torch.from_numpy(R.random().as_matrix()).cuda().float())
+            #         rotation = transformer(
+            #             ref_pnts2[None, ...],
+            #             transpose_input=True)[0, ...].reshape(3, 3)
+            #         ref_pnts2 = torch.matmul(ref_pnts2, rotation.transpose(0, 1))
+            #         transform = np.eye(4)
+            #         transform[0, 3] = i * 2
+            #         transform[1, 3] = j * 2
+            #         scene.add_geometry(trimesh.PointCloud(ref_pnts2.detach().cpu()), transform=transform)
+            # scene.show()
+        data.append(torch.cat(
+            [indices[:, None].cuda(), pnts, sdf[:, None]],
+            dim=-1).detach().cpu().numpy())
+        rotations.append(rotation.detach().cpu().numpy())
+        centroids.append(centroid.detach().cpu().numpy())
 
-    return torch.cat(data, dim=0).detach().cpu().numpy(), \
-        torch.stack(rotations, axis=0).detach().cpu().numpy(), \
-        torch.stack(centroids, axis=0).detach().cpu().numpy()
+    data = np.concatenate(data, axis=0)
+    rotations = np.stack(rotations, axis=0)
+    centroids = np.stack(centroids, axis=0)
+    np.savez(out_path, samples=data,
+             rotations=rotations, centroids=centroids)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('data_path', type=str)
     parser.add_argument('out_path', type=str)
+    parser.add_argument('--ckpt', type=str, default=None)
     parser.add_argument('--nshape_cat', type=int, default=50)
     parser.add_argument('--save_iterm', action='store_true')
     args = parser.parse_args()
@@ -107,7 +130,6 @@ if __name__ == '__main__':
             num_sampled = 0
             for filename in value:
                 print("processing {}th model {}".format(num_sampled, filename))
-            # try:
                 object_path = os.path.join(
                     args.data_path, key, filename,  'models/model_normalized.obj')
                 verts, faces = load_obj(object_path)
@@ -141,18 +163,14 @@ if __name__ == '__main__':
                              voxels=voxels.cpu().numpy(),
                              voxel_size=voxel_size.item())
 
-                samples, rotations, centroids = get_samples(
-                    surface_pnts.cuda(), samples.cuda(), voxels.cuda(), voxel_size)
-
                 sample_outpath = os.path.join(
-                    cate_out, "{}.npy".format(filename))
-                # np.savez(sample_outpath,
-                #          samples=samples,
-                #          rotaions=rotations,
-                #          centroids=centroids)
-
-            # except Exception:
-            #     print("failed at loading model {}".format(filename))
+                    cate_out, "{}.npz".format(filename))
+                save_samples(surface_pnts.cuda(),
+                             samples.cuda(),
+                             voxels.cuda(),
+                             voxel_size,
+                             args.ckpt,
+                             sample_outpath)
 
                 num_sampled += 1
                 if num_sampled >= args.nshape_cat:

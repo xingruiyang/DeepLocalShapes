@@ -3,6 +3,7 @@ from utils import cal_xyz_axis
 import trimesh
 import torch
 import numpy as np
+from network import PointNetTransformer
 
 
 def cal_xyz_axis2(surf, centroid):
@@ -46,23 +47,28 @@ def cal_xyz_axis2(surf, centroid):
 
 
 mesh = trimesh.load(sys.argv[1]).dump(True)
+transformer = PointNetTransformer.create_from_ckpt(sys.argv[2])
+transformer.eval()
 # mesh = trimesh.primitives.Cylinder(raidus=1, height=2)
 # trimesh.PointCloud(pnts).show()
 scene = trimesh.Scene()
 for i in range(3):
     for j in range(3):
-        pnts = mesh.sample(500)
-        pnts = torch.from_numpy(pnts)
+        pnts = mesh.sample(128)
+        pnts = torch.from_numpy(pnts).float()
         centroids = torch.mean(pnts, dim=0)
         ref_pnts = pnts-centroids
-        rotation = cal_xyz_axis(ref_pnts)
-        print(torch.det(rotation))
+        # rotation = cal_xyz_axis(ref_pnts)
+        # ref_pnts = torch.matmul(ref_pnts, rotation.transpose(0, 1))
+
+        rotation = transformer(ref_pnts[None, ...], transpose_input=True)
+        # print(torch.det(rotation))
         # print(rotation)
         # rotation = cal_xyz_axis2(pnts.cpu().numpy(), centroids.cpu().numpy())
         # rotation = torch.from_numpy(rotation)
-
+        rotation = rotation.reshape(3,3)
         pnts = torch.matmul(pnts, rotation.transpose(0, 1))
-        pnts = trimesh.PointCloud(pnts)
+        pnts = trimesh.PointCloud(ref_pnts.detach().cpu())
         transform = np.eye(4)
         transform[0, 3] = i * 2
         transform[1, 3] = j * 2

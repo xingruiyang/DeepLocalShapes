@@ -1,4 +1,3 @@
-import torch.nn.functional as F
 from copy import deepcopy
 
 import numpy as np
@@ -25,6 +24,11 @@ def cal_z_axis(ref_points: torch.Tensor):
 
 
 def cal_x_axis(ref_pnts, z_axis):
+    '''Calculate the x-axis from point clouds
+    Args:
+        ref_points (tensor): needs to be centred
+        z_axis (tensor): the estimated z_axis
+    '''
     z_proj = torch.sum(ref_pnts*z_axis, dim=-1, keepdim=True)
     sign_weight = z_proj**2
     sign_weight[z_proj < 0] *= -1
@@ -36,43 +40,18 @@ def cal_x_axis(ref_pnts, z_axis):
 
     x_axis = dist_weight * sign_weight * vec_proj
     x_axis = torch.sum(x_axis, dim=0)
-    
+
     return normalize(x_axis)
 
 
-def RodsRotatFormula(a, b):
-    B, _ = a.shape
-    device = a.device
-    b = b.to(device)
-    c = torch.cross(a, b)
-    theta = torch.acos(F.cosine_similarity(a, b)).unsqueeze(1).unsqueeze(2)
-
-    c = F.normalize(c, p=2, dim=1)
-    one = torch.ones(B, 1, 1).to(device)
-    zero = torch.zeros(B, 1, 1).to(device)
-    a11 = zero
-    a12 = -c[:, 2].unsqueeze(1).unsqueeze(2)
-    a13 = c[:, 1].unsqueeze(1).unsqueeze(2)
-    a21 = c[:, 2].unsqueeze(1).unsqueeze(2)
-    a22 = zero
-    a23 = -c[:, 0].unsqueeze(1).unsqueeze(2)
-    a31 = -c[:, 1].unsqueeze(1).unsqueeze(2)
-    a32 = c[:, 0].unsqueeze(1).unsqueeze(2)
-    a33 = zero
-    Rx = torch.cat(
-        (torch.cat((a11, a12, a13), dim=2), torch.cat(
-            (a21, a22, a23), dim=2), torch.cat((a31, a32, a33), dim=2)),
-        dim=1)
-    I = torch.eye(3).to(device)
-    R = I.unsqueeze(0).repeat(B, 1, 1) + torch.sin(theta) * \
-        Rx + (1 - torch.cos(theta)) * torch.matmul(Rx, Rx)
-    return R.transpose(-1, -2)
-
-
 def cal_xyz_axis(ref_pnts):
+    '''Calculate the local reference frame of a point patch 
+    Args:
+        ref_points(Tensor): needs to be centred
+    '''
     z_axis = cal_z_axis(ref_pnts)
     x_axis = cal_x_axis(ref_pnts, z_axis)
-    y_axis = torch.cross(z_axis, x_axis)
+    y_axis = torch.cross(x_axis, z_axis)
     return torch.stack([x_axis, y_axis, z_axis], dim=0)
 
 

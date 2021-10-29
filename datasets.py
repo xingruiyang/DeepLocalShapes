@@ -79,11 +79,14 @@ class SingleMeshDataset(Dataset):
 
 class BatchMeshDataset(Dataset):
     def __init__(self,
-                 data_path: str):
+                 data_path: str,
+                 transform: bool = False):
         super().__init__()
         self.data_path = data_path
         cat_dirs = os.listdir(data_path)
         data_points = []
+        rotations = []
+        centroids = []
         voxel_count = 0
         print("loading data...")
         start_time = time.time()
@@ -92,13 +95,27 @@ class BatchMeshDataset(Dataset):
             cat_models = []
             for ind, filename in enumerate(model_files):
                 cat_models.append(filename)
-                data_point = np.load(os.path.join(data_path, cat, filename))
+                data = np.load(os.path.join(data_path, cat, filename))
+                data_point = data['samples']
+
                 num_voxels = data_point[-1, 0]+1
                 data_point[:, 0] += voxel_count
                 voxel_count += num_voxels
                 data_points.append(data_point)
+
+                if transform:
+                    rotation = data['rotations']
+                    centroid = data['centroids']
+                    rotations.append(rotation)
+                    centroids.append(centroid)
         self.samples = np.concatenate(data_points, axis=0)
         self.num_latents = voxel_count
+        if transform:
+            self.rotations = np.concatenate(rotations, axis=0)
+            self.centroids = np.concatenate(centroids, axis=0)
+        else:
+            self.rotations = None
+            self.centroids = None
         print("data loaded for {} seconds".format(time.time()-start_time))
 
     @classmethod
@@ -115,7 +132,3 @@ class BatchMeshDataset(Dataset):
         pnts = self.samples[index, 1:4]
         sdf = self.samples[index, 4]
         return (indices, pnts, sdf)
-
-
-if __name__ == '__main__':
-    dataset = BatchMeshDataset.get_loader(sys.argv[1], 10000)
