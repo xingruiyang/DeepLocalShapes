@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from datasets import BatchMeshDataset, SingleMeshDataset
+from datasets import BatchMeshDataset
 from network import ImplicitNet
 
 
@@ -24,7 +24,12 @@ class Trainer():
         self.device = device
         self.ckpt_freq = ckpt_freq
 
-    def fit(self, model, train_data, centroids=None, rotations=None):
+    def fit(self,
+            model: torch.nn.Module,
+            train_data: np.ndarray,
+            centroids: np.ndarray = None,
+            rotations: np.ndarray = None,
+            latent_map: dict = None):
         model.train()
         num_points = train_data.shape[0]
         num_batch = (num_points-1) // self.batch_size + 1
@@ -81,18 +86,24 @@ class Trainer():
 
             if (n_epoch > 0 and self.ckpt_freq > 0):
                 if n_epoch % self.ckpt_freq == 0:
-                    self.save_ckpt(model, n_epoch)
-            self.save_latest(model)
+                    self.save_ckpt(model, latent_map=latent_map,
+                                   n_epoch=n_epoch)
+            self.save_latest(model, latent_map)
 
-    def save_ckpt(self, model, n_epoch=0):
+    def save_ckpt(self, model, latent_map=None, n_epoch=0):
         model.save_ckpt(os.path.join(
             self.out_path, 'ckpt_e{}_model.pth'.format(n_epoch)))
         model.save_latents(os.path.join(
-            self.out_path, 'ckpt_e{}_latents.pth'.format(n_epoch)))
+            self.out_path, 'ckpt_e{}_latents.npy'.format(n_epoch)))
+        if latent_map is not None:
+            model.save_latents_splits(os.path.join(
+                self.out_path, 'ckpt_e{}_latent'.format(n_epoch)), latent_map)
 
-    def save_latest(self, model):
+    def save_latest(self, model, latent_map=None):
         model.save_ckpt(os.path.join(self.out_path, 'latest_model.pth'))
-        model.save_latents(os.path.join(self.out_path, 'latest_latents.pth'))
+        model.save_latents(os.path.join(self.out_path, 'latest_latents.npy'))
+        if latent_map is not None:
+            model.save_latents_splits(self.out_path, latent_map)
 
 
 if __name__ == '__main__':
@@ -107,6 +118,7 @@ if __name__ == '__main__':
     parser.add_argument('--cpu', action='store_true')
     parser.add_argument('--orient', action='store_true')
     args = parser.parse_args()
+    os.makedirs(args.out_path, exits_ok=True)
 
     device = torch.device('cpu' if args.cpu else 'cuda')
     train_data = BatchMeshDataset(args.data, transform=args.orient)
@@ -120,13 +132,16 @@ if __name__ == '__main__':
         ckpt_freq=args.ckpt_freq,
         out_path=args.out_path,
         num_epochs=args.num_epochs,
-        batch_size=args.batch_size
+        batch_size=args.batch_size,
     )
     trainer.fit(
         model,
         train_data.samples,
         train_data.centroids,
-        train_data.rotations)
+        train_data.rotations,
+        train_data.latent_map
+    )
 
-    # model.save_model(os.path.join(args.output, 'last_ckpt.pth'))
-    # model.save_latents(os.path.join(args.output, 'last_latents.npy'))
+    model.save_model(os.path.join(args.out_path, 'last_ckpt.pth'))
+    model.save_latents(os.path.join(args.out_path, 'last_latents.npy'))
+    model.save_latents_splits(args.out_path, train_data.latent_map)

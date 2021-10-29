@@ -16,66 +16,65 @@ def collate_batch(batch):
     return index[perm], pnts[perm, :], sdf[perm]
 
 
-class SingleMeshDataset(Dataset):
-    def __init__(self, data_path, precompute=False) -> None:
-        super().__init__()
-        samples = np.load(os.path.join(
-            data_path, 'samples.npz'))
-        self.samples = samples['samples'].astype(np.float32)
-        self.voxels = samples['voxels'].astype(np.float32)
-        self.voxel_size = samples['voxel_size']
-        self.num_latents = self.voxels.shape[0]
-        self.precompute = precompute
-        if precompute:
-            self.pre_compute()
+# class SingleMeshDataset(Dataset):
+#     def __init__(self, data_path, precompute=False) -> None:
+#         super().__init__()
+#         samples = np.load(os.path.join(
+#             data_path, 'samples.npz'))
+#         self.samples = samples['samples'].astype(np.float32)
+#         self.voxels = samples['voxels'].astype(np.float32)
+#         self.voxel_size = samples['voxel_size']
+#         self.num_latents = self.voxels.shape[0]
+#         self.precompute = precompute
+#         if precompute:
+#             self.pre_compute()
 
-    def pre_compute(self):
-        data = []
-        print("starting preparing dataset")
-        for i in range(self.num_latents):
-            voxel = self.voxels[i, :]
-            pnts = self.samples[:, :3] - voxel
-            selector = np.linalg.norm(pnts, ord=2, axis=-1)
-            selector = selector < (1.5 * self.voxel_size)
-            pnts = pnts[selector, :] / (1.5*self.voxel_size)
-            sdf = self.samples[selector, 3] / (1.5*self.voxel_size)
-            indices = np.asarray([i]*pnts.shape[0])
-            data.append(np.concatenate(
-                [indices[:, None], pnts, sdf[:, None]], axis=-1))
-        print("finished preparing dataset")
-        self.samples = np.concatenate(data, axis=0).astype(np.float32)
-        np.save('a.npy', self.samples)
+#     def pre_compute(self):
+#         data = []
+#         print("starting preparing dataset")
+#         for i in range(self.num_latents):
+#             voxel = self.voxels[i, :]
+#             pnts = self.samples[:, :3] - voxel
+#             selector = np.linalg.norm(pnts, ord=2, axis=-1)
+#             selector = selector < (1.5 * self.voxel_size)
+#             pnts = pnts[selector, :] / (1.5*self.voxel_size)
+#             sdf = self.samples[selector, 3] / (1.5*self.voxel_size)
+#             indices = np.asarray([i]*pnts.shape[0])
+#             data.append(np.concatenate(
+#                 [indices[:, None], pnts, sdf[:, None]], axis=-1))
+#         print("finished preparing dataset")
+#         self.samples = np.concatenate(data, axis=0).astype(np.float32)
+#         np.save('a.npy', self.samples)
 
-    @classmethod
-    def get_loader(cls, data_path, batch_size, precompute):
-        dataset = SingleMeshDataset(data_path, precompute=precompute)
-        return DataLoader(
-            dataset, batch_size=batch_size,
-            shuffle=True, num_workers=8,
-            collate_fn=None if dataset.precompute else collate_batch)
+#     @classmethod
+#     def get_loader(cls, data_path, batch_size, precompute):
+#         dataset = SingleMeshDataset(data_path, precompute=precompute)
+#         return DataLoader(
+#             dataset, batch_size=batch_size,
+#             shuffle=True, num_workers=8,
+#             collate_fn=None if dataset.precompute else collate_batch)
 
-    def __len__(self):
-        if self.precompute:
-            return self.samples.shape[0]
-        else:
-            return self.num_latents
+#     def __len__(self):
+#         if self.precompute:
+#             return self.samples.shape[0]
+#         else:
+#             return self.num_latents
 
-    def __getitem__(self, index):
-        if self.precompute:
-            indices = self.samples[index, 0]
-            pnts = self.samples[index, 1:4]
-            sdf = self.samples[index, 4]
-            return (indices, pnts, sdf)
-        else:
-            voxel = self.voxels[index, :]
-            pnts = self.samples[:, :3] - voxel
-            selector = np.linalg.norm(pnts, ord=2, axis=-1)
-            selector = selector < (2 * self.voxel_size)
-            pnts = pnts[selector, :] / (2*self.voxel_size)
-            sdf = self.samples[selector, 3] / (2*self.voxel_size)
-            indices = np.asarray([index]*pnts.shape[0])
-            return (indices, pnts, sdf)
-
+#     def __getitem__(self, index):
+#         if self.precompute:
+#             indices = self.samples[index, 0]
+#             pnts = self.samples[index, 1:4]
+#             sdf = self.samples[index, 4]
+#             return (indices, pnts, sdf)
+#         else:
+#             voxel = self.voxels[index, :]
+#             pnts = self.samples[:, :3] - voxel
+#             selector = np.linalg.norm(pnts, ord=2, axis=-1)
+#             selector = selector < (2 * self.voxel_size)
+#             pnts = pnts[selector, :] / (2*self.voxel_size)
+#             sdf = self.samples[selector, 3] / (2*self.voxel_size)
+#             indices = np.asarray([index]*pnts.shape[0])
+#             return (indices, pnts, sdf)
 
 class BatchMeshDataset(Dataset):
     def __init__(self,
@@ -88,17 +87,23 @@ class BatchMeshDataset(Dataset):
         rotations = []
         centroids = []
         voxel_count = 0
+        self.latent_map = dict()
         print("loading data...")
         start_time = time.time()
+        num_model = 0
         for cat in cat_dirs:
             model_files = os.listdir(os.path.join(data_path, cat))
             cat_models = []
             for ind, filename in enumerate(model_files):
                 cat_models.append(filename)
-                data = np.load(os.path.join(data_path, cat, filename))
+                cat_filename = os.path.join(cat, filename)
+                data = np.load(os.path.join(data_path, cat_filename))
                 data_point = data['samples']
 
-                num_voxels = data_point[-1, 0]+1
+                num_voxels = int(data_point[-1, 0]+1)
+                self.latent_map[cat_filename] = (
+                    voxel_count, voxel_count+num_voxels)
+
                 data_point[:, 0] += voxel_count
                 voxel_count += num_voxels
                 data_points.append(data_point)
@@ -108,6 +113,7 @@ class BatchMeshDataset(Dataset):
                     centroid = data['centroids']
                     rotations.append(rotation)
                     centroids.append(centroid)
+                num_model += 1
         self.samples = np.concatenate(data_points, axis=0)
         self.num_latents = voxel_count
         if transform:

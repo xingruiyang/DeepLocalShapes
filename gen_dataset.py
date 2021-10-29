@@ -98,11 +98,16 @@ def save_samples(surface, samples, voxels, voxel_size, ckpt, out_path):
         rotations.append(rotation.detach().cpu().numpy())
         centroids.append(centroid.detach().cpu().numpy())
 
+    voxels = voxels.detach().cpu().numpy()
     data = np.concatenate(data, axis=0)
     rotations = np.stack(rotations, axis=0)
     centroids = np.stack(centroids, axis=0)
-    np.savez(out_path, samples=data,
-             rotations=rotations, centroids=centroids)
+    np.savez(out_path,
+             samples=data,
+             voxels=voxels,
+             voxel_size=voxel_size,
+             rotations=rotations,
+             centroids=centroids)
 
 
 if __name__ == '__main__':

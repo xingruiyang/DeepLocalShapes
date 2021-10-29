@@ -9,7 +9,7 @@ import trimesh
 from skimage.measure import marching_cubes
 from sklearn.neighbors import NearestNeighbors
 
-from datasets import SingleMeshDataset
+# from datasets import SingleMeshDataset
 from network import ImplicitNet
 
 
@@ -157,7 +157,7 @@ class ShapeReconstructor(object):
                     self.resolution, self.resolution, self.resolution) < self.max_surface_dist
 
             if self.centroids is not None:
-                voxel_grid -= self.centroids[latent_ind, :] * self.input_scale
+                voxel_grid -= self.centroids[latent_ind, :] 
             if self.rotations is not None:
                 voxel_grid = torch.matmul(
                     voxel_grid, self.rotations[latent_ind, ...].transpose(0, 1))
@@ -273,7 +273,7 @@ class ShapeReconstructor(object):
 
             if self.centroids is not None:
                 centroid = self.centroids[latent_ind, :]
-                voxel_grid -= (centroid * self.input_scale)
+                voxel_grid -= centroid
             if self.rotations is not None:
                 rotation = self.rotations[latent_ind, ...]
                 voxel_grid = torch.matmul(voxel_grid, rotation.transpose(0, 1))
@@ -309,9 +309,9 @@ class ShapeReconstructor(object):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('cfg', type=str)
+    parser.add_argument('ckpt', type=str)
     parser.add_argument('data', type=str)
     parser.add_argument('latents', type=str)
-    parser.add_argument('network', type=str)
     parser.add_argument('--output', type=str, default=None)
     parser.add_argument('--resolution', type=int, default=8)
     parser.add_argument('--latent-size', type=int, default=125)
@@ -327,13 +327,19 @@ if __name__ == '__main__':
 
     device = torch.device('cuda:0' if (
         (not args.cpu) and torch.cuda.is_available()) else 'cpu')
-    network = ImplicitNet.create_from_cfg(args.cfg, args.network, device)
+    network = ImplicitNet.create_from_cfg(args.cfg, args.ckpt, device)
     network.initialize_latents(ckpt=args.latents)
 
-    eval_data = SingleMeshDataset(args.data)
+    data = np.load(args.data)
+    print(data.keys())
     reconstructor = ShapeReconstructor(
-        network, eval_data.voxels,
-        eval_data.voxel_size, args.resolution, device=device)
+        network,
+        voxels=data['voxels'],
+        voxel_size=data['voxel_size'],
+        resolution=args.resolution,
+        centroids=data['centroids'] if args.orient else None,
+        rotations=data['rotations'] if args.orient else None,
+        device=device)
 
     recon_shape = reconstructor.reconstruct(
     ) if args.no_interp else reconstructor.reconstruct_interp()

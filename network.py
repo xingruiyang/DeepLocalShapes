@@ -1,5 +1,6 @@
 import json
 import math
+import os
 
 import numpy as np
 import torch
@@ -111,9 +112,18 @@ class ImplicitNet(nn.Module):
             "model_state_dict": self.state_dict()}
         torch.save(model_state_dict, filename)
 
-    def save_latents(self, filename):
+    def save_latents(self, filename: str):
         latent_vecs = self.latent_vecs.detach().cpu().numpy()
         np.save(filename, latent_vecs)
+
+    def save_latents_splits(self, out_path: str, latent_map: dict):
+        assert(isinstance(latent_map, dict))
+        for key, value in latent_map.items():
+            out_filepath = os.path.join(out_path, key)
+            if not os.path.exists(out_filepath):
+                os.makedirs(out_filepath, exist_ok=True)
+            latent_vecs = self.latent_vecs[value[0]:value[1], :].detach().cpu().numpy()
+            np.save(os.path.join(out_filepath, 'latent_vecs.npy'), latent_vecs)
 
     @staticmethod
     def create_from_cfg(cfg, ckpt=None, device=torch.device('cpu')):
