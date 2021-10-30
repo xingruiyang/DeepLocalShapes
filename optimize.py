@@ -43,5 +43,6 @@ if __name__ == '__main__':
         train_data.rotations,
         train_data.latent_map
     )
+    
     model.save_latents(os.path.join(args.out_path, 'last_latents.npy'))
     model.save_latents_splits(args.out_path, train_data.latent_map)

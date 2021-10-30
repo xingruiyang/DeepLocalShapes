@@ -66,8 +66,8 @@ def save_samples(surface: torch.Tensor,
         ckpt (str): checkpoints to the transformer network
         out_path (str): output directory
     '''
-    transformer = PointNetTransformer.create_from_ckpt(ckpt)
-    transformer.eval().cuda()
+    #transformer = PointNetTransformer.create_from_ckpt(ckpt)
+    # transformer.eval().cuda()
     data = []
     centroids = []
     rotations = []
@@ -145,12 +145,20 @@ if __name__ == '__main__':
     parser.add_argument('--save_iterm', action='store_true')
     args = parser.parse_args()
 
+    # split_filenames = [
+    #     'splits/shapenet/sv2_chairs_train.json',
+    #     'splits/shapenet/sv2_lamps_train.json',
+    #     'splits/shapenet/sv2_planes_train.json',
+    #     'splits/shapenet/sv2_sofas_train.json',
+    #     'splits/shapenet/sv2_tables_train.json'
+    # ]
+
     split_filenames = [
-        'splits/shapenet/sv2_chairs_train.json',
-        'splits/shapenet/sv2_lamps_train.json',
-        'splits/shapenet/sv2_planes_train.json',
-        'splits/shapenet/sv2_sofas_train.json',
-        'splits/shapenet/sv2_tables_train.json'
+        'splits/shapenet/sv2_chairs_test.json',
+        'splits/shapenet/sv2_lamps_test.json',
+        'splits/shapenet/sv2_planes_test.json',
+        'splits/shapenet/sv2_sofas_test.json',
+        'splits/shapenet/sv2_tables_test.json'
     ]
 
     for split_file in split_filenames:

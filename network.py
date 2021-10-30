@@ -73,7 +73,7 @@ class ImplicitNet(nn.Module):
     def configure_optimizers(self):
         if self.freeze_decoder:
             trainable_params = [{
-                'params': self.latent_vecs, 'lr': 1e-3}]
+                'params': self.latent_vecs, 'lr': 1e-2}]
         else:
             trainable_params = [{
                 'params': self.parameters(), 'lr': 1e-3},
