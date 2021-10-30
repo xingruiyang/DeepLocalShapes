@@ -10,7 +10,6 @@
         "use_tanh": false,
         "clamp_dist": -1,
         "act_fn": "leaky_relu",
-        "optimizer": "Adam",
-        "freeze_decoder": false
+        "optimizer": "Adam"
     }
 }

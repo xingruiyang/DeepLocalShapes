@@ -1,17 +1,15 @@
 import argparse
 import json
 import os
-from copy import deepcopy
 
 import numpy as np
 import torch
-import trimesh
 from scipy.spatial.transform import Rotation as R
 
 from network import PointNetTransformer
 from third_party.torchgp import (compute_sdf, load_obj, normalize,
                                  point_sample, sample_near_surface)
-from utils import cal_xyz_axis
+from utils import cal_xyz_axis, display_sdf
 
 
 def get_voxels(pnts: torch.Tensor,
@@ -55,7 +53,6 @@ def save_samples(surface: torch.Tensor,
                  samples: torch.Tensor,
                  voxels: torch.Tensor,
                  voxel_size: float,
-                 ckpt: str,
                  out_path: str):
     '''Split sample pnts into voxel grids and save as npz format
     Args:
@@ -66,31 +63,32 @@ def save_samples(surface: torch.Tensor,
         ckpt (str): checkpoints to the transformer network
         out_path (str): output directory
     '''
-    #transformer = PointNetTransformer.create_from_ckpt(ckpt)
-    # transformer.eval().cuda()
+
     data = []
     centroids = []
     rotations = []
+    voxel_radius = []
 
     num_voxels = voxels.shape[0]
     for i in range(num_voxels):
         voxel = voxels[i, :]
-        pnts = samples[:, :3] - voxel
-        selector = torch.norm(pnts, p=2, dim=-1)
-        selector = selector < (1.5 * voxel_size)
-        pnts = pnts[selector, :] / (1.5 * voxel_size)
-        sdf = samples[selector, 3] / (1.5 * voxel_size)
-        indices = torch.from_numpy(np.asarray([i]*pnts.shape[0]))
+        # pnts = samples[:, :3] - voxel
+        # selector = torch.norm(pnts, p=2, dim=-1)
+        # selector = selector < (1.5 * voxel_size)
+        # pnts = pnts[selector, :] / (1.5 * voxel_size)
+        # sdf = samples[selector, 3] / (1.5 * voxel_size)
+        # indices = torch.from_numpy(np.asarray([i]*pnts.shape[0]))
 
         surface_pnts = surface - voxel
         selector = torch.norm(surface_pnts, p=2, dim=-1)
         selector = selector < (1.5 * voxel_size)
-        surface_pnts = surface_pnts[selector, :] / (1.5 * voxel_size)
+        surface_pnts = surface_pnts[selector, :]  # / (1.5 * voxel_size)
 
-        rotation = torch.eye(3)
-        centroid = torch.mean(pnts, dim=0)
+        rotation = torch.eye(3).cuda()
+        centroid = torch.mean(surface_pnts, dim=0)
+        ref_pnts = surface_pnts - centroid
+
         if surface_pnts.shape[0] > 10:
-            ref_pnts = surface_pnts - centroid
             rotation = cal_xyz_axis(ref_pnts)
             # rotation = transformer(
             #     ref_pnts[None, ...],
@@ -100,7 +98,7 @@ def save_samples(surface: torch.Tensor,
             # for i in range(3):
             #     for j in range(3):
             #         ref_pnts2 = deepcopy(ref_pnts)
-            #         ref_pnts2 += torch.randn_like(ref_pnts2) * 0.05
+            #         ref_pnts2 += torch.randn_like(ref_pnts2) * 0.002
             #         ref_pnts2 = torch.matmul(
             #             ref_pnts2, torch.from_numpy(R.random().as_matrix()).cuda().float())
             #         # rotation = transformer(
@@ -115,9 +113,24 @@ def save_samples(surface: torch.Tensor,
             #         scene.add_geometry(trimesh.PointCloud(
             #             ref_pnts2.detach().cpu()), transform=transform)
             # scene.show()
+
+        ref_pnts = torch.matmul(ref_pnts, rotation.transpose(-1, -2))
+        radius = torch.max(torch.norm(ref_pnts, p=2, dim=-1)).item()
+        new_centre = voxel + centroid
+
+        pnts = samples[:, :3] - new_centre
+        selector = torch.norm(pnts, p=2, dim=-1)
+        selector = selector < radius
+        pnts = pnts[selector, :] / radius
+        sdf = samples[selector, 3] / radius
+        indices = torch.from_numpy(np.asarray([i]*pnts.shape[0]))
+
+        # display_sdf(pnts.cpu(), sdf.cpu())
+
         data.append(torch.cat(
             [indices[:, None].cuda(), pnts, sdf[:, None]],
             dim=-1).detach().cpu().numpy())
+        voxel_radius.append(radius)
         rotations.append(rotation.detach().cpu().numpy())
         centroids.append(centroid.detach().cpu().numpy())
 
@@ -125,6 +138,8 @@ def save_samples(surface: torch.Tensor,
     data = np.concatenate(data, axis=0)
     rotations = np.stack(rotations, axis=0)
     centroids = np.stack(centroids, axis=0)
+    voxel_radius = np.asarray(voxel_radius)[:, None]
+    voxels = np.concatenate([voxels, voxel_radius], axis=-1)
     np.savez(out_path,
              samples=data,
              voxels=voxels,
@@ -141,25 +156,25 @@ if __name__ == '__main__':
     parser.add_argument('data_path', type=str)
     parser.add_argument('out_path', type=str)
     parser.add_argument('--ckpt', type=str, default=None)
-    parser.add_argument('--nshape_cat', type=int, default=50)
+    parser.add_argument('--nshape_cat', type=int, default=10)
     parser.add_argument('--save_iterm', action='store_true')
     args = parser.parse_args()
 
-    # split_filenames = [
-    #     'splits/shapenet/sv2_chairs_train.json',
-    #     'splits/shapenet/sv2_lamps_train.json',
-    #     'splits/shapenet/sv2_planes_train.json',
-    #     'splits/shapenet/sv2_sofas_train.json',
-    #     'splits/shapenet/sv2_tables_train.json'
-    # ]
-
     split_filenames = [
-        'splits/shapenet/sv2_chairs_test.json',
-        'splits/shapenet/sv2_lamps_test.json',
-        'splits/shapenet/sv2_planes_test.json',
-        'splits/shapenet/sv2_sofas_test.json',
-        'splits/shapenet/sv2_tables_test.json'
+        'splits/shapenet/sv2_chairs_train.json',
+        'splits/shapenet/sv2_lamps_train.json',
+        'splits/shapenet/sv2_planes_train.json',
+        'splits/shapenet/sv2_sofas_train.json',
+        'splits/shapenet/sv2_tables_train.json'
     ]
+
+    # split_filenames = [
+    #     'splits/shapenet/sv2_chairs_test.json',
+    #     'splits/shapenet/sv2_lamps_test.json',
+    #     'splits/shapenet/sv2_planes_test.json',
+    #     'splits/shapenet/sv2_sofas_test.json',
+    #     'splits/shapenet/sv2_tables_test.json'
+    # ]
 
     for split_file in split_filenames:
         object_list = json.load(open(split_file, 'r'))['ShapeNetV2']

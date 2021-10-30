@@ -99,7 +99,7 @@ def draw_voxels(pnts: np.ndarray,
     o3d.visualization.draw_geometries(geometries+[point_cloud])
 
 
-def display_sdf(pts: np.ndarray, sdf: np.ndarray, only_negative=False):
+def display_sdf(pts, sdf, only_negative=False):
     """Visualize pnts with corresponding sdf values
     Args:
         pts (ndarray|tensor): pnts of shape Nx3
