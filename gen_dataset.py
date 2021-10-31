@@ -81,7 +81,8 @@ def save_samples(surface: torch.Tensor,
 
         surface_pnts = surface - voxel
         selector = torch.norm(surface_pnts, p=2, dim=-1)
-        selector = selector < (1.5 * voxel_size)
+        selector = selector < voxel_size
+        # selector = selector < (1.5 * voxel_size)
         surface_pnts = surface_pnts[selector, :]  # / (1.5 * voxel_size)
 
         rotation = torch.eye(3).cuda()
@@ -114,8 +115,9 @@ def save_samples(surface: torch.Tensor,
             #             ref_pnts2.detach().cpu()), transform=transform)
             # scene.show()
 
-        ref_pnts = torch.matmul(ref_pnts, rotation.transpose(-1, -2))
+        # ref_pnts = torch.matmul(ref_pnts, rotation.transpose(-1, -2))
         radius = torch.max(torch.norm(ref_pnts, p=2, dim=-1)).item()
+        radius = max(radius, 1.5 * voxel_size)
         new_centre = voxel + centroid
 
         pnts = samples[:, :3] - new_centre
@@ -155,26 +157,25 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('data_path', type=str)
     parser.add_argument('out_path', type=str)
-    parser.add_argument('--ckpt', type=str, default=None)
     parser.add_argument('--nshape_cat', type=int, default=10)
     parser.add_argument('--save_iterm', action='store_true')
     args = parser.parse_args()
 
-    split_filenames = [
-        'splits/shapenet/sv2_chairs_train.json',
-        'splits/shapenet/sv2_lamps_train.json',
-        'splits/shapenet/sv2_planes_train.json',
-        'splits/shapenet/sv2_sofas_train.json',
-        'splits/shapenet/sv2_tables_train.json'
-    ]
-
     # split_filenames = [
-    #     'splits/shapenet/sv2_chairs_test.json',
-    #     'splits/shapenet/sv2_lamps_test.json',
-    #     'splits/shapenet/sv2_planes_test.json',
-    #     'splits/shapenet/sv2_sofas_test.json',
-    #     'splits/shapenet/sv2_tables_test.json'
+    #     'splits/shapenet/sv2_chairs_train.json',
+    #     'splits/shapenet/sv2_lamps_train.json',
+    #     'splits/shapenet/sv2_planes_train.json',
+    #     'splits/shapenet/sv2_sofas_train.json',
+    #     'splits/shapenet/sv2_tables_train.json'
     # ]
+
+    split_filenames = [
+        'splits/shapenet/sv2_chairs_test.json',
+        'splits/shapenet/sv2_lamps_test.json',
+        'splits/shapenet/sv2_planes_test.json',
+        'splits/shapenet/sv2_sofas_test.json',
+        'splits/shapenet/sv2_tables_test.json'
+    ]
 
     for split_file in split_filenames:
         object_list = json.load(open(split_file, 'r'))['ShapeNetV2']
@@ -223,7 +224,6 @@ if __name__ == '__main__':
                              samples.cuda(),
                              voxels.cuda(),
                              voxel_size,
-                             args.ckpt,
                              sample_outpath)
 
                 num_sampled += 1

@@ -169,7 +169,7 @@ class ShapeReconstructor(object):
             z_array.append(z.detach().cpu().numpy())
             z_masks.append(z_mask)
 
-        voxels = self.voxels / 0.03125 - .5
+        voxels = self.voxels / self.voxel_size - .5
         z_array = self.interp_border(z_array, voxels)
 
         for latent_ind in range(self.voxels.shape[0]):

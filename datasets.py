@@ -87,11 +87,22 @@ class BatchMeshDataset(Dataset):
         data_points = []
         rotations = []
         centroids = []
-        voxel_count = 0
         self.latent_map = dict()
+
+        # num_data_points = 0
+        # for cat in cat_dirs:
+        #     model_files = os.listdir(os.path.join(data_path, cat))
+        #     for ind, filename in enumerate(model_files):
+        #         cat_filename = os.path.join(cat, filename)
+        #         data = np.load(os.path.join(data_path, cat_filename))
+        #         num_data_points += data['samples'].shape[0]
+
         print("loading data...")
         start_time = time.time()
         num_model = 0
+        voxel_count = 0
+        shape_count =0 
+        # self.samples = np.zeros((num_data_points, 5))
         for cat in cat_dirs:
             model_files = os.listdir(os.path.join(data_path, cat))
             cat_models = []
@@ -102,11 +113,14 @@ class BatchMeshDataset(Dataset):
                 data_point = data['samples']
 
                 num_voxels = int(data_point[-1, 0]+1)
+                # self.samples[shape_count:(
+                #     shape_count+data_point.shape[0]), :] = data_point
                 self.latent_map[cat_filename.split('.')[0]] = (
                     voxel_count, voxel_count+num_voxels)
 
                 data_point[:, 0] += voxel_count
                 voxel_count += num_voxels
+                # shape_count += num_voxels
                 data_points.append(data_point)
 
                 if transform:
